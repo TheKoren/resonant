@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/resonant-core",
-    "crates/resonant-fft",
-    "crates/resonant-filters",
-    "crates/resonant-stream",
-    "crates/resonant-analysis",
-    "crates/resonant",
+    "resonant-core",
+    "resonant-fft",
+    "resonant-filters",
+    "resonant-stream",
+    "resonant-analysis",
+    "resonant",
 ]
 
 [workspace.package]

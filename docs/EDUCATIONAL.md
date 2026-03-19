@@ -1,7 +1,6 @@
 # DSP Concepts for Rust Developers
 
 > This document explains the signal processing concepts used in the resonant library.
-> It is written for Rust developers who may not have a DSP background.
 
 ---
 
@@ -58,13 +57,9 @@ let windowed = WindowFn::Hann.apply(&samples);
 
 ## The Fourier Transform (FFT)
 
-### What it does
-
 The Fourier Transform decomposes a time-domain signal into its constituent frequencies.
 Given N samples of audio, the FFT produces N/2+1 complex values, each representing the
 amplitude and phase of a specific frequency.
-
-### Why "Fast"?
 
 The naive Discrete Fourier Transform (DFT) requires O(N²) operations. The Fast Fourier
 Transform (FFT) computes the same result in O(N log N) — making real-time audio analysis
