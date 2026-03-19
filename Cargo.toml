@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/resonant-core",
+    "crates/resonant-fft",
+    "crates/resonant-filters",
+    "crates/resonant-stream",
+    "crates/resonant-analysis",
+    "crates/resonant",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/TheKoren/resonant"

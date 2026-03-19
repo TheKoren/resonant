@@ -1,0 +1,21 @@
+[package]
+name = "resonant-analysis"
+description = "High-level audio analysis: onset detection, beat tracking, pitch estimation, MFCCs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["multimedia::audio", "science"]
+keywords = ["dsp", "audio", "analysis", "pitch", "beat"]
+
+[dependencies]
+resonant-fft = { path = "../resonant-fft" }
+resonant-filters = { path = "../resonant-filters" }
+
+[features]
+default = []
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

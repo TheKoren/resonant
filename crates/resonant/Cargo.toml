@@ -1,0 +1,24 @@
+[package]
+name = "resonant"
+description = "Ergonomic audio DSP for Rust — FFT, filters, analysis in one line of code"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["multimedia::audio"]
+keywords = ["dsp", "audio", "fft", "signal", "analysis"]
+
+[dependencies]
+resonant-core = { path = "../resonant-core" }
+resonant-fft = { path = "../resonant-fft" }
+resonant-filters = { path = "../resonant-filters" }
+resonant-stream = { path = "../resonant-stream" }
+resonant-analysis = { path = "../resonant-analysis" }
+
+[features]
+default = []
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

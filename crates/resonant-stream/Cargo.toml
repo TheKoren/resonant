@@ -1,0 +1,21 @@
+[package]
+name = "resonant-stream"
+description = "Async streaming DSP pipeline with backpressure and zero-copy chunks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["multimedia::audio", "asynchronous"]
+keywords = ["dsp", "streaming", "audio", "pipeline", "async"]
+
+[dependencies]
+resonant-fft = { path = "../resonant-fft" }
+resonant-filters = { path = "../resonant-filters" }
+
+[features]
+default = []
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

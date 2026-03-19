@@ -1,0 +1,20 @@
+[package]
+name = "resonant-filters"
+description = "FIR/IIR filters and design helpers with compile-time domain safety"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+categories = ["multimedia::audio", "science"]
+keywords = ["dsp", "filter", "biquad", "iir", "fir"]
+
+[dependencies]
+resonant-core = { path = "../resonant-core" }
+
+[features]
+default = []
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
