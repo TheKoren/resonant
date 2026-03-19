@@ -10,7 +10,7 @@ categories = ["multimedia::audio", "science"]
 keywords = ["dsp", "filter", "biquad", "iir", "fir"]
 
 [dependencies]
-resonant-core = { path = "../resonant-core" }
+resonant-core = { version = "0.0.1", path = "../resonant-core" }
 
 [features]
 default = []

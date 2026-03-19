@@ -10,11 +10,11 @@ categories = ["multimedia::audio"]
 keywords = ["dsp", "audio", "fft", "signal", "analysis"]
 
 [dependencies]
-resonant-core = { path = "../resonant-core" }
-resonant-fft = { path = "../resonant-fft" }
-resonant-filters = { path = "../resonant-filters" }
-resonant-stream = { path = "../resonant-stream" }
-resonant-analysis = { path = "../resonant-analysis" }
+resonant-core = { version = "0.0.1", path = "../resonant-core" }
+resonant-fft = { version = "0.0.1", path = "../resonant-fft" }
+resonant-filters = { version = "0.0.1", path = "../resonant-filters" }
+resonant-stream = { version = "0.0.1", path = "../resonant-stream" }
+resonant-analysis = { version = "0.0.1", path = "../resonant-analysis" }
 
 [features]
 default = []
