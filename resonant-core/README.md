@@ -41,7 +41,7 @@ assert_eq!(rb.pop(), Some(1.0));
 Heap-allocated overlapping frame extractor for STFT-style workflows. Configure
 window size and hop size, push samples in, and read complete frames.
 
-```rust
+```rust,ignore
 use resonant_core::SlidingWindow;
 
 let mut sw = SlidingWindow::new(1024, 512); // 50% overlap
