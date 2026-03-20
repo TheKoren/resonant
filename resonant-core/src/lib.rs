@@ -9,6 +9,8 @@ pub mod signal;
 /// Heap-allocated sliding window for overlapping frame extraction.
 #[cfg(feature = "alloc")]
 pub mod sliding_window;
+/// Window functions for spectral analysis.
+pub mod window;
 
 pub use ring_buf::RingBuf;
 pub use signal::{Domain, FreqDomain, Signal, TimeDomain};
