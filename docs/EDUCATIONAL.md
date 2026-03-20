@@ -45,12 +45,22 @@ what matters for your application.
 
 ### Code example
 
-```rust,ignore
-use resonant_core::window::WindowFn;
+```rust
+use resonant_core::window;
 
-let samples: Vec<f32> = get_audio_chunk();
-let windowed = WindowFn::Hann.apply(&samples);
-// `windowed` is now tapered — ready for FFT
+let mut samples = [0.5_f32; 1024];
+window::hann(&mut samples);
+// `samples` is now tapered to zero at both ends — ready for FFT
+```
+
+Each window function takes `&mut [f32]` and multiplies in-place, so there is no
+allocation. You can also apply a window to a subset of a buffer:
+
+```rust
+use resonant_core::window;
+
+let mut buf = [1.0_f32; 2048];
+window::hamming(&mut buf[..1024]); // only window the first half
 ```
 
 ---
@@ -115,8 +125,99 @@ More detail will be added as the STFT implementation is completed.
 
 ## Fixed-Point Arithmetic
 
-TODO: Explain Q15/Q31 formats, why they matter for embedded targets without FPU,
-and how resonant-core's types work.
+### Why fixed-point?
+
+Many microcontrollers (Cortex-M0, M3, most RISC-V cores) have no floating-point
+unit (FPU). On these targets every `f32` operation is emulated in software —
+slow, unpredictable, and power-hungry. Fixed-point arithmetic uses plain integers
+with an implicit scaling factor, giving deterministic performance and
+bit-exact results across platforms.
+
+Even on targets *with* an FPU, fixed-point is sometimes preferred in safety-critical
+or latency-sensitive paths because it has no NaN, no infinity, and no rounding
+mode surprises.
+
+### The Q format
+
+The **Q format** is a convention for interpreting an integer as a fractional value.
+The name tells you how the bits are split:
+
+| Format | Storage | Signed bits | Fractional bits | Range | Resolution |
+|--------|---------|-------------|-----------------|-------|------------|
+| Q15 | `i16` | 1 | 15 | \[−1.0, 1.0) | 1/32768 ≈ 3.05 × 10⁻⁵ |
+| Q31 | `i32` | 1 | 31 | \[−1.0, 1.0) | 1/2147483648 ≈ 4.66 × 10⁻¹⁰ |
+
+The conversion is straightforward:
+
+```
+real_value = raw_integer / 2^fractional_bits
+```
+
+So the `i16` value `16384` in Q15 represents `16384 / 32768 = 0.5`.
+
+### Saturation vs wrapping
+
+In audio DSP, wrapping overflow produces harsh clicks and distortion. Hardware
+DSP chips use **saturating arithmetic**: when a result exceeds the representable
+range, it clamps to the maximum (or minimum) value instead of wrapping around.
+
+resonant-core's `Q15` and `Q31` types follow this convention — all arithmetic
+methods are named `saturating_*` to make the behaviour explicit:
+
+```rust
+use resonant_core::fixed::Q15;
+
+let loud = Q15::from_f32(0.9);
+let result = loud.saturating_add(loud);
+assert_eq!(result, Q15::MAX); // clamped, not wrapped
+```
+
+### Multiplication
+
+Multiplying two Q15 values produces a Q30 result (15 + 15 fractional bits) in a
+32-bit intermediate. To get back to Q15 we shift right by 15 bits, discarding the
+extra precision. This is equivalent to:
+
+```
+result = (a * b) >> 15
+```
+
+The same logic applies to Q31 using a 64-bit intermediate with a right-shift of 31.
+
+### When to use Q15 vs Q31
+
+| | Q15 | Q31 |
+|---|-----|-----|
+| **Storage** | 2 bytes | 4 bytes |
+| **Precision** | ~16-bit audio quality | ~32-bit, exceeds 24-bit audio |
+| **Speed** | Faster on 16-bit MCUs | Faster on 32-bit MCUs |
+| **Use case** | Telephony, simple filters, Cortex-M0 | High-fidelity audio, Cortex-M4/M7 |
+
+If you are targeting a 32-bit MCU, prefer Q31 — the extra precision costs nothing
+on a 32-bit data path. Use Q15 when memory bandwidth or storage is the bottleneck
+(e.g. large delay buffers on a 16-bit target).
+
+### Converting between fixed and floating point
+
+resonant-core provides `From`/`Into` conversions in both directions:
+
+```rust
+use resonant_core::fixed::{Q15, Q31};
+
+// f32 → Q15
+let q: Q15 = Q15::from_f32(0.5);
+
+// Q15 → f32
+let f: f32 = q.to_f32();
+
+// f64 → Q31 (higher precision during conversion)
+let q31: Q31 = Q31::from_f64(0.123456789);
+let back: f64 = q31.to_f64();
+assert!((back - 0.123456789).abs() < 1e-7);
+```
+
+Values outside \[−1.0, 1.0) are clamped automatically — no panics, no undefined
+behaviour.
 
 ---
 
