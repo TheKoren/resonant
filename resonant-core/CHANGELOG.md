@@ -15,3 +15,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `compile_fail` doc-test proving type safety
 - `RingBuf<T, N>` const-generic, stack-allocated circular buffer
 - `SlidingWindow<T>` heap-allocated overlapping frame extractor (requires `alloc` feature)
+- Window functions: `hann`, `hamming`, `blackman`, `rectangular`, `bartlett`
