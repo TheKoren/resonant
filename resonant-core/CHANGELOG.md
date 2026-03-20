@@ -16,3 +16,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `RingBuf<T, N>` const-generic, stack-allocated circular buffer
 - `SlidingWindow<T>` heap-allocated overlapping frame extractor (requires `alloc` feature)
 - Window functions: `hann`, `hamming`, `blackman`, `rectangular`, `bartlett`
+- `Q15` signed 1.15 fixed-point type with saturating arithmetic and `From`/`Into` for `f32`/`f64`
