@@ -13,3 +13,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Domain` trait (open — downstream crates can implement custom domains)
 - `Signal::map_domain()` for domain transitions
 - `compile_fail` doc-test proving type safety
+- `RingBuf<T, N>` const-generic, stack-allocated circular buffer
