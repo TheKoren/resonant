@@ -5,5 +5,7 @@
 //! bit-exact reproducibility is required.
 
 mod q15;
+mod q31;
 
 pub use q15::Q15;
+pub use q31::Q31;

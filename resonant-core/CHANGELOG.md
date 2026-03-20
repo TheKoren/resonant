@@ -17,3 +17,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `SlidingWindow<T>` heap-allocated overlapping frame extractor (requires `alloc` feature)
 - Window functions: `hann`, `hamming`, `blackman`, `rectangular`, `bartlett`
 - `Q15` signed 1.15 fixed-point type with saturating arithmetic and `From`/`Into` for `f32`/`f64`
+- `Q31` signed 1.31 fixed-point type with higher precision and same API as `Q15`
