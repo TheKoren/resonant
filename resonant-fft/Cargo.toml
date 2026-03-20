@@ -10,7 +10,7 @@ categories = ["multimedia::audio", "science"]
 keywords = ["dsp", "fft", "stft", "audio", "signal"]
 
 [dependencies]
-resonant-core = { version = "0.0.1", path = "../resonant-core" }
+resonant-core = { version = "0.0.2", path = "../resonant-core" }
 
 [features]
 default = []
