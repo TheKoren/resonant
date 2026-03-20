@@ -6,6 +6,11 @@
 pub mod ring_buf;
 /// Compile-time domain tracking for signals.
 pub mod signal;
+/// Heap-allocated sliding window for overlapping frame extraction.
+#[cfg(feature = "alloc")]
+pub mod sliding_window;
 
 pub use ring_buf::RingBuf;
 pub use signal::{Domain, FreqDomain, Signal, TimeDomain};
+#[cfg(feature = "alloc")]
+pub use sliding_window::SlidingWindow;

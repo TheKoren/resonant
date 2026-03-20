@@ -14,3 +14,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Signal::map_domain()` for domain transitions
 - `compile_fail` doc-test proving type safety
 - `RingBuf<T, N>` const-generic, stack-allocated circular buffer
+- `SlidingWindow<T>` heap-allocated overlapping frame extractor (requires `alloc` feature)
