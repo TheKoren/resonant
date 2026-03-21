@@ -12,3 +12,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - In-place, `no_std`, `no_alloc`, power-of-two sizes only
 - `FftError` enum for non-power-of-two and empty input errors
 - Re-export of `num_complex::Complex`
+- `rustfft` backend for arbitrary-size FFTs (default feature, requires `std`)
+- `FftPlan` struct for reusable FFT plans via `rustfft`

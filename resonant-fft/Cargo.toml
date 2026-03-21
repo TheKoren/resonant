@@ -13,9 +13,10 @@ keywords = ["dsp", "fft", "stft", "audio", "signal"]
 resonant-core = { version = "0.0.2", path = "../resonant-core" }
 num-complex = { version = "0.4", default-features = false, features = ["libm"] }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+rustfft = { version = "6.4", optional = true }
 
 [features]
-default = []
+default = ["rustfft"]
 
 [lints.clippy]
 unwrap_used = "deny"
