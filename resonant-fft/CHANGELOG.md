@@ -18,3 +18,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `SignalIfftExt` trait — `.ifft()` on `Signal<Vec<Complex<f32>>, FreqDomain>`
 - `SignalFreqExt` trait — `.magnitude()`, `.phase()`, `.magnitude_squared()` on frequency-domain signals
 - `compile_fail` doc-tests proving domain misuse is a compile error
+- `Stft` with builder pattern for configurable STFT analysis and overlap-add synthesis
+- Window function integration via `StftBuilder::window_fn()`

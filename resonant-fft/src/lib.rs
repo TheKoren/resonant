@@ -40,6 +40,9 @@ pub mod rustfft_backend;
 
 mod ext;
 
+/// Short-Time Fourier Transform with overlap-add reconstruction.
+pub mod stft;
+
 pub use ext::{SignalFftExt, SignalFreqExt, SignalIfftExt};
 pub use num_complex::Complex;
 pub use radix2::{fft, ifft};
