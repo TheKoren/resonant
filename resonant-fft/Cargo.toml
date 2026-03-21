@@ -11,6 +11,8 @@ keywords = ["dsp", "fft", "stft", "audio", "signal"]
 
 [dependencies]
 resonant-core = { version = "0.0.2", path = "../resonant-core" }
+num-complex = { version = "0.4", default-features = false, features = ["libm"] }
+num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 
 [features]
 default = []
