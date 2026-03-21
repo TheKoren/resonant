@@ -13,7 +13,8 @@ keywords = ["dsp", "filter", "biquad", "iir", "fir"]
 resonant-core = { version = "0.0.2", path = "../resonant-core" }
 
 [features]
-default = []
+default = ["alloc"]
+alloc = []
 
 [lints.clippy]
 unwrap_used = "deny"

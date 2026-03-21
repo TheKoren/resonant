@@ -12,3 +12,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `BiquadCoeffs` and `BiquadState` types
 - `BiquadCoeffs::PASSTHROUGH` constant for unity gain
 - `Biquad::process_sample()`, `process_buf()`, `state()`, `reset()`, `set_coeffs()`
+- `Fir` filter with arbitrary coefficient vector (requires `alloc` feature)
+- `Fir::process_sample()`, `process_buf()`, `coeffs()`, `delay()`, `reset()`
