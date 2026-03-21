@@ -1,13 +1,27 @@
-#![no_std]
+#![cfg_attr(not(feature = "rustfft"), no_std)]
 #![warn(missing_docs)]
 
 //! `resonant-fft` — type-safe FFT, STFT, and DCT transforms.
 //!
-//! This crate provides a pure-core radix-2 Cooley-Tukey FFT that works on
-//! `no_std` targets without allocation. Power-of-two sizes only.
+//! ## Backends
+//!
+//! - **`rustfft`** (default feature) — wraps the [`rustfft`] crate for
+//!   arbitrary-size FFTs. Requires `std`.
+//! - **`radix2`** — pure-core radix-2 Cooley-Tukey, `no_std`, `no_alloc`,
+//!   power-of-two sizes only. Always available.
+//!
+//! To use only the `no_std` fallback, disable default features:
+//!
+//! ```toml
+//! resonant-fft = { version = "...", default-features = false }
+//! ```
 
 /// Pure-core radix-2 FFT implementation (power-of-two sizes, no allocation).
 pub mod radix2;
+
+#[cfg(feature = "rustfft")]
+/// FFT backend using `rustfft` — supports arbitrary sizes.
+pub mod rustfft_backend;
 
 pub use num_complex::Complex;
 pub use radix2::{fft, ifft};
@@ -15,7 +29,8 @@ pub use radix2::{fft, ifft};
 /// Errors that can occur during FFT computation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FftError {
-    /// Input length is not a power of two.
+    /// Input length is not a power of two (radix-2), or does not match the
+    /// planned length (rustfft plan).
     NotPowerOfTwo(usize),
     /// Input is empty.
     Empty,
