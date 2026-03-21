@@ -144,22 +144,22 @@ impl<T: AsRef<[Complex<f32>]>> SignalFreqExt for Signal<T, FreqDomain> {
 
 /// Dispatches to the best available backend.
 #[cfg(feature = "rustfft")]
-fn run_fft_forward(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
+pub(crate) fn run_fft_forward(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
     crate::rustfft_backend::fft(buf)
 }
 
 #[cfg(not(feature = "rustfft"))]
-fn run_fft_forward(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
+pub(crate) fn run_fft_forward(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
     crate::radix2::fft(buf)
 }
 
 #[cfg(feature = "rustfft")]
-fn run_fft_inverse(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
+pub(crate) fn run_fft_inverse(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
     crate::rustfft_backend::ifft(buf)
 }
 
 #[cfg(not(feature = "rustfft"))]
-fn run_fft_inverse(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
+pub(crate) fn run_fft_inverse(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
     crate::radix2::ifft(buf)
 }
 
