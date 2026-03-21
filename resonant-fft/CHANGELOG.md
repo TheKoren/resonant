@@ -14,3 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Re-export of `num_complex::Complex`
 - `rustfft` backend for arbitrary-size FFTs (default feature, requires `std`)
 - `FftPlan` struct for reusable FFT plans via `rustfft`
+- `SignalFftExt` trait — `.fft()` on `Signal<T, TimeDomain>` with compile-time domain transition
+- `SignalIfftExt` trait — `.ifft()` on `Signal<Vec<Complex<f32>>, FreqDomain>`
+- `SignalFreqExt` trait — `.magnitude()`, `.phase()`, `.magnitude_squared()` on frequency-domain signals
+- `compile_fail` doc-tests proving domain misuse is a compile error

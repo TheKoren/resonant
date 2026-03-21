@@ -10,6 +10,21 @@
 //! - **`radix2`** — pure-core radix-2 Cooley-Tukey, `no_std`, `no_alloc`,
 //!   power-of-two sizes only. Always available.
 //!
+//! ## Extension traits
+//!
+//! Import [`SignalFftExt`] to call `.fft()` on time-domain signals and
+//! [`SignalIfftExt`] to call `.ifft()` on frequency-domain signals. These
+//! enforce domain transitions at compile time.
+//!
+//! ```
+//! use resonant_core::signal::Signal;
+//! use resonant_fft::{SignalFftExt, SignalIfftExt};
+//!
+//! let sig = Signal::from_samples(vec![1.0_f32, 0.0, -1.0, 0.0]);
+//! let freq = sig.fft().unwrap();
+//! let time = freq.ifft().unwrap();
+//! ```
+//!
 //! To use only the `no_std` fallback, disable default features:
 //!
 //! ```toml
@@ -23,6 +38,9 @@ pub mod radix2;
 /// FFT backend using `rustfft` — supports arbitrary sizes.
 pub mod rustfft_backend;
 
+mod ext;
+
+pub use ext::{SignalFftExt, SignalFreqExt, SignalIfftExt};
 pub use num_complex::Complex;
 pub use radix2::{fft, ifft};
 
