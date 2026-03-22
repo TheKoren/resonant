@@ -16,3 +16,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Fir::process_sample()`, `process_buf()`, `coeffs()`, `delay()`, `reset()`
 - `design::butterworth_lowpass()` — second-order Butterworth lowpass coefficients
 - `design::butterworth_highpass()` — second-order Butterworth highpass coefficients
+- `resample::decimate()` — integer decimation with cascaded Butterworth anti-alias filter (requires `alloc`)

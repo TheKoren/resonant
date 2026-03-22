@@ -19,6 +19,10 @@ pub mod fir;
 /// Filter design helpers — Butterworth lowpass/highpass coefficient computation.
 pub mod design;
 
+#[cfg(feature = "alloc")]
+/// Sample-rate conversion — integer decimation with anti-alias filtering.
+pub mod resample;
+
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
 #[cfg(feature = "alloc")]
 pub use fir::Fir;
