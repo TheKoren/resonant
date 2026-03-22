@@ -16,6 +16,9 @@ pub mod biquad;
 /// FIR filter with arbitrary coefficient slice.
 pub mod fir;
 
+/// Filter design helpers — Butterworth lowpass/highpass coefficient computation.
+pub mod design;
+
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
 #[cfg(feature = "alloc")]
 pub use fir::Fir;

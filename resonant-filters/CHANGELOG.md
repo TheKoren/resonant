@@ -14,3 +14,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `Biquad::process_sample()`, `process_buf()`, `state()`, `reset()`, `set_coeffs()`
 - `Fir` filter with arbitrary coefficient vector (requires `alloc` feature)
 - `Fir::process_sample()`, `process_buf()`, `coeffs()`, `delay()`, `reset()`
+- `design::butterworth_lowpass()` — second-order Butterworth lowpass coefficients
+- `design::butterworth_highpass()` — second-order Butterworth highpass coefficients
