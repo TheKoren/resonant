@@ -113,13 +113,57 @@ The FFT gives you the frequency content of an entire signal — but not *when* t
 frequencies occur. The STFT solves this by applying the FFT to overlapping windows
 of the signal, producing a **spectrogram**: a 2D representation of frequency vs. time.
 
+### How it works
+
+1. **Slice** the signal into overlapping frames of length `window_size`
+2. **Window** each frame (e.g. Hann) to taper the edges
+3. **FFT** each windowed frame to get its frequency content
+4. Collect the results into a 2D grid: one axis is time (frame index), the other is
+   frequency (bin index)
+
 ### Parameters
 
 - **Window size**: determines frequency resolution (larger = more bins, better resolution)
 - **Hop size**: how far the window advances each step (smaller = more time resolution)
 - **Overlap**: `window_size - hop_size`, typically 50–75%
 
-More detail will be added as the STFT implementation is completed.
+### The time-frequency trade-off
+
+You cannot have perfect resolution in both time and frequency simultaneously — this
+is the **uncertainty principle** of signal processing.
+
+| Window size | Frequency resolution | Time resolution |
+|-------------|---------------------|-----------------|
+| Large (4096) | Excellent — narrow bins | Poor — each frame spans ~93 ms at 44.1 kHz |
+| Small (256) | Poor — wide bins | Excellent — each frame spans ~5.8 ms |
+
+A hop size of 50% overlap (hop = window_size / 2) is a common starting point.
+
+### Synthesis: overlap-add
+
+The inverse STFT reconstructs the time-domain signal from its frames:
+
+1. **IFFT** each frequency-domain frame back to the time domain
+2. **Overlap-add**: sum the reconstructed frames at their original positions
+
+With a good window and sufficient overlap, the original signal is recovered exactly
+(up to floating-point precision). This is the basis for effects like time-stretching
+and pitch-shifting.
+
+### Code example
+
+```rust,ignore
+use resonant_fft::stft::StftBuilder;
+use resonant_core::Signal;
+
+let signal = Signal::from_samples(audio_samples);
+let stft = StftBuilder::new(1024).hop_size(512).build();
+
+let frames = stft.analyze(&signal).unwrap();
+// `frames` is a Vec of frequency-domain Signal frames
+
+let reconstructed = stft.synthesize(&frames, original_length).unwrap();
+```
 
 ---
 
@@ -223,7 +267,141 @@ behaviour.
 
 ## Filters
 
-TODO: Explain biquad filters, FIR vs IIR, and the design helpers in resonant-filters.
+A **digital filter** modifies a signal by attenuating or amplifying certain frequencies.
+Filters are the workhorses of audio DSP — equalizers, crossovers, anti-alias stages, and
+effects like wah-wah are all built from filters.
+
+### FIR vs IIR
+
+There are two fundamental filter architectures:
+
+| | FIR (Finite Impulse Response) | IIR (Infinite Impulse Response) |
+|---|---|---|
+| **Feedback** | None — output depends only on current and past *inputs* | Uses feedback — output depends on past *outputs* too |
+| **Impulse response** | Finite: dies out after N taps | Infinite: decays but never truly reaches zero |
+| **Phase** | Can be exactly linear phase | Generally non-linear phase |
+| **Order for steep rolloff** | High (many taps needed) | Low (a 2nd-order section gives 12 dB/oct) |
+| **Stability** | Always stable | Can be unstable if poles are outside the unit circle |
+
+**Rule of thumb**: Use IIR (biquad) when you need efficient, steep filtering and don't
+care about phase linearity. Use FIR when you need linear phase or a very specific impulse
+response shape (e.g. a matched filter or a Hilbert transformer).
+
+### The biquad filter
+
+The **biquad** (bi-quadratic) is a second-order IIR filter — the most common building
+block in audio processing. It has five coefficients:
+
+```
+y[n] = b0·x[n] + b1·x[n-1] + b2·x[n-2] - a1·y[n-1] - a2·y[n-2]
+```
+
+Where `x[n]` is the input, `y[n]` is the output, and the `b`/`a` coefficients define
+the filter's frequency response.
+
+resonant uses **direct form II transposed**, which has better numerical properties
+(less rounding error) than the direct form shown above:
+
+```
+y[n] = b0·x[n] + s1
+s1   = b1·x[n] - a1·y[n] + s2
+s2   = b2·x[n] - a2·y[n]
+```
+
+Here `s1` and `s2` are the filter's internal state — just two numbers that capture the
+filter's "memory" of past samples.
+
+### Why direct form II transposed?
+
+There are several ways to implement the same biquad transfer function. Direct form II
+transposed is preferred in audio because:
+
+- **Fewer delay elements**: only 2 state variables instead of 4
+- **Better numerical behaviour**: accumulation happens on the output path, reducing
+  the chance of intermediate overflow with f32 arithmetic
+- **Coefficient changes**: updating coefficients mid-stream is smoother because the
+  state represents filtered (not raw) history
+
+### Cascading biquads
+
+A single biquad gives 12 dB/octave rolloff. For steeper filters, cascade multiple
+sections. Two cascaded biquads give a 4th-order filter (24 dB/oct), which is what
+resonant's `decimate()` function uses for anti-aliasing.
+
+### Butterworth design
+
+The **Butterworth filter** has the flattest possible magnitude response in the passband —
+no ripples. At the cutoff frequency, the gain is exactly −3 dB (≈ 0.707 amplitude).
+
+resonant computes Butterworth coefficients using the **bilinear transform**: a mapping
+from the analog (continuous-time) filter design to the digital (discrete-time) domain.
+
+The steps are:
+
+1. **Pre-warp** the cutoff frequency to compensate for the bilinear transform's
+   frequency compression near Nyquist:
+   ```
+   k = tan(π × cutoff / sample_rate)
+   ```
+
+2. **Map** the analog Butterworth prototype (which has a simple formula) through the
+   bilinear transform to get digital coefficients `b0, b1, b2, a1, a2`.
+
+The design arithmetic uses `f64` for precision; the resulting coefficients are cast to
+`f32` for runtime efficiency.
+
+```rust,ignore
+use resonant_filters::design;
+use resonant_filters::Biquad;
+
+// Design a lowpass at 1 kHz
+let coeffs = design::butterworth_lowpass(1000.0, 44100.0).unwrap();
+let mut filter = Biquad::new(coeffs);
+
+// Filter audio sample-by-sample
+for sample in audio.iter_mut() {
+    *sample = filter.process_sample(*sample);
+}
+```
+
+### FIR filters
+
+An FIR filter computes each output sample as a weighted sum of the most recent N input
+samples:
+
+```
+y[n] = h[0]·x[n] + h[1]·x[n-1] + ... + h[N-1]·x[n-N+1]
+```
+
+The weights `h[0..N]` are called the filter **coefficients** or **taps**. The FIR's
+impulse response *is* the coefficient vector — feed in a single `1.0` followed by
+zeros, and you get the coefficients back out.
+
+resonant's `Fir` struct uses a circular delay line internally, avoiding the need to
+shift the entire buffer each sample.
+
+### Decimation (sample-rate reduction)
+
+**Decimation** reduces the sample rate by an integer factor *M*: keep every M-th sample,
+discard the rest. But you can't just throw samples away — the original signal may
+contain frequencies above the new Nyquist limit (half the new sample rate), which would
+fold back as **aliasing** artifacts.
+
+The solution: **lowpass filter first**, then downsample.
+
+```
+input (48 kHz) → [anti-alias LP at 8 kHz] → [keep every 3rd] → output (16 kHz)
+```
+
+resonant's `decimate()` cascades two Butterworth biquad sections for a 4th-order
+anti-alias filter, then picks every M-th sample.
+
+```rust,ignore
+use resonant_filters::resample;
+
+// Decimate from 48 kHz to 16 kHz (factor 3)
+let output = resample::decimate(&input, 3, 48000.0).unwrap();
+```
 
 ---
 
