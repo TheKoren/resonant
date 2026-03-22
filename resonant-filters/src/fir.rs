@@ -196,6 +196,6 @@ mod tests {
     #[test]
     #[should_panic(expected = "at least one tap")]
     fn empty_coeffs_panics() {
-        Fir::new(std::vec![]);
+        let _ = Fir::new(std::vec![]);
     }
 }
