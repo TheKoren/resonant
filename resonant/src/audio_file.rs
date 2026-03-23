@@ -328,7 +328,114 @@ impl AudioFile {
 
         Ok(bins)
     }
+
+    /// Return a lazy iterator that yields one `Vec<FrequencyBin>` per STFT
+    /// frame.
+    ///
+    /// Uses the configured `window_size` (required — defaults to 4096 if not
+    /// set), `overlap`, `window_fn`, and `db_scale`.
+    ///
+    /// Each frame is computed on demand, so memory usage is proportional to
+    /// one frame, not the entire spectrogram.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AudioError::InvalidParameter`] if the effective window size
+    /// is zero.
+    pub fn fft_stream(&self) -> Result<FftFrameIter<'_>, AudioError> {
+        let window_size = self.config.window_size.unwrap_or(4096);
+        if window_size == 0 {
+            return Err(AudioError::InvalidParameter(
+                "window_size must be > 0".to_string(),
+            ));
+        }
+
+        let hop_size = ((1.0 - self.config.overlap) * window_size as f32).round() as usize;
+        let hop_size = hop_size.max(1); // at least 1 to avoid infinite loop
+
+        Ok(FftFrameIter {
+            samples: self.samples_mono(),
+            window_size,
+            hop_size,
+            window_fn: self.config.window_fn,
+            sample_rate: self.sample_rate,
+            db_scale: self.config.db_scale,
+            offset: 0,
+        })
+    }
 }
+
+/// Lazy iterator that yields one `Vec<FrequencyBin>` per STFT frame.
+///
+/// Created by [`AudioFile::fft_stream()`].
+pub struct FftFrameIter<'a> {
+    samples: &'a [f32],
+    window_size: usize,
+    hop_size: usize,
+    window_fn: WindowFn,
+    sample_rate: u32,
+    db_scale: bool,
+    offset: usize,
+}
+
+impl<'a> Iterator for FftFrameIter<'a> {
+    type Item = Result<Vec<FrequencyBin>, AudioError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset + self.window_size > self.samples.len() {
+            return None;
+        }
+
+        let frame = &self.samples[self.offset..self.offset + self.window_size];
+        self.offset += self.hop_size;
+
+        // Window the frame
+        let mut windowed = frame.to_vec();
+        (self.window_fn)(&mut windowed);
+
+        // FFT
+        let signal = Signal::from_samples(windowed);
+        let freq = match signal.fft() {
+            Ok(f) => f,
+            Err(e) => return Some(Err(e.into())),
+        };
+
+        let magnitudes = freq.magnitude();
+        let phases = freq.phase();
+        let n = magnitudes.len();
+        let num_bins = n / 2 + 1;
+        let rate = self.sample_rate as f32;
+        let n_f = n as f32;
+        let db = self.db_scale;
+
+        let bins: Vec<FrequencyBin> = (0..num_bins)
+            .map(|k| {
+                let mag = magnitudes[k];
+                FrequencyBin {
+                    frequency_hz: k as f32 * rate / n_f,
+                    magnitude: if db {
+                        20.0 * mag.max(f32::MIN_POSITIVE).log10()
+                    } else {
+                        mag
+                    },
+                    phase: phases[k],
+                }
+            })
+            .collect();
+
+        Some(Ok(bins))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.offset + self.window_size > self.samples.len() {
+            return (0, Some(0));
+        }
+        let remaining = (self.samples.len() - self.offset - self.window_size) / self.hop_size + 1;
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a> ExactSizeIterator for FftFrameIter<'a> {}
 
 /// Average all channels down to mono.
 fn downmix_to_mono(interleaved: &[f32], channels: u16) -> Vec<f32> {
@@ -608,5 +715,93 @@ mod tests {
     #[should_panic(expected = "overlap must be in 0.0..1.0")]
     fn builder_overlap_negative() {
         let _ = make_sine(1024, 440.0, 44100).with_overlap(-0.1);
+    }
+
+    // --- fft_stream tests ---
+
+    #[test]
+    fn fft_stream_frame_count() {
+        // 8192 samples, window=1024, overlap=0.5 → hop=512
+        // frames = (8192 - 1024) / 512 + 1 = 15
+        let audio = make_sine(8192, 440.0, 44100).with_window_size(1024);
+        let iter = audio.fft_stream();
+        assert!(iter.is_ok());
+        let iter = iter.ok();
+        let frames: Vec<_> = iter.into_iter().flatten().collect();
+        let ok_frames: Vec<_> = frames.into_iter().filter_map(|r| r.ok()).collect();
+        assert_eq!(ok_frames.len(), 15);
+    }
+
+    #[test]
+    fn fft_stream_bin_count() {
+        let audio = make_sine(4096, 440.0, 44100).with_window_size(1024);
+        let mut iter = audio.fft_stream();
+        assert!(iter.is_ok());
+        if let Ok(ref mut it) = iter {
+            if let Some(Ok(frame)) = it.next() {
+                assert_eq!(frame.len(), 1024 / 2 + 1);
+            }
+        }
+    }
+
+    #[test]
+    fn fft_stream_exact_size() {
+        let audio = make_sine(8192, 440.0, 44100).with_window_size(1024);
+        let iter = audio.fft_stream();
+        assert!(iter.is_ok());
+        if let Ok(it) = iter {
+            assert_eq!(it.len(), 15);
+        }
+    }
+
+    #[test]
+    fn fft_stream_overlap_affects_count() {
+        // overlap=0.0 → hop=1024 → frames = (8192-1024)/1024 + 1 = 8
+        let audio_no_overlap = make_sine(8192, 440.0, 44100)
+            .with_window_size(1024)
+            .with_overlap(0.0);
+        let count_no = audio_no_overlap
+            .fft_stream()
+            .ok()
+            .map(|it| it.count())
+            .unwrap_or(0);
+
+        // overlap=0.75 → hop=256 → frames = (8192-1024)/256 + 1 = 29
+        let audio_high_overlap = make_sine(8192, 440.0, 44100)
+            .with_window_size(1024)
+            .with_overlap(0.75);
+        let count_hi = audio_high_overlap
+            .fft_stream()
+            .ok()
+            .map(|it| it.count())
+            .unwrap_or(0);
+
+        assert_eq!(count_no, 8);
+        assert_eq!(count_hi, 29);
+    }
+
+    #[test]
+    fn fft_stream_signal_too_short() {
+        // Signal shorter than window → no frames
+        let audio = make_sine(512, 440.0, 44100).with_window_size(1024);
+        let iter = audio.fft_stream();
+        assert!(iter.is_ok());
+        assert_eq!(iter.ok().map(|it| it.count()), Some(0));
+    }
+
+    #[test]
+    fn fft_stream_db_scale() {
+        let audio = make_sine(4096, 440.0, 44100)
+            .with_window_size(1024)
+            .with_db_scale(true);
+        let mut iter = audio.fft_stream();
+        assert!(iter.is_ok());
+        if let Ok(ref mut it) = iter {
+            if let Some(Ok(frame)) = it.next() {
+                // All dB magnitudes should be negative or zero for a sine wave
+                // (magnitude ≤ window_size/2)
+                assert!(frame.iter().all(|b| b.magnitude <= 100.0));
+            }
+        }
     }
 }

@@ -17,3 +17,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `AudioFile::fft()` — full-signal FFT with Hann window and labelled frequency bins
 - Builder methods: `with_window_size()`, `with_overlap()`, `with_window_fn()`, `with_db_scale()`
 - `WindowFn` type alias for window function pointers
+- `AudioFile::fft_stream()` — lazy STFT frame iterator yielding `Vec<FrequencyBin>` per frame
+- `FftFrameIter` implementing `Iterator` and `ExactSizeIterator`
