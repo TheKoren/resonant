@@ -19,3 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `WindowFn` type alias for window function pointers
 - `AudioFile::fft_stream()` — lazy STFT frame iterator yielding `Vec<FrequencyBin>` per frame
 - `FftFrameIter` implementing `Iterator` and `ExactSizeIterator`
+- Re-exports: `Signal`, `TimeDomain`, `FreqDomain`, `window`, `SignalFftExt`, `SignalIfftExt`, `SignalFreqExt`, `Complex`, `Biquad`, `BiquadCoeffs`, `design`
+- `AudioFile::from_samples()` — create from raw f32 samples without decoding a file
+- `spectrum_visualiser` example — top-N frequency peaks from an audio file
+- `beat_detector` example — spectral flux onset detection stub
+- `spectrogram` example — time×frequency heatmap PNG via plotters
+- `window_comparison` example — overlay plot of five window functions showing leakage trade-offs

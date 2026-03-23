@@ -1,0 +1,25 @@
+[package]
+name = "resonant-examples"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+resonant = { path = "../resonant" }
+plotters = "0.3.7"
+
+[[bin]]
+name = "spectrum_visualiser"
+path = "spectrum_visualiser.rs"
+
+[[bin]]
+name = "beat_detector"
+path = "beat_detector.rs"
+
+[[bin]]
+name = "spectrogram"
+path = "spectrogram.rs"
+
+[[bin]]
+name = "window_comparison"
+path = "window_comparison.rs"
