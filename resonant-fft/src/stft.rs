@@ -277,19 +277,19 @@ mod tests {
     #[test]
     #[should_panic(expected = "window_size must be > 0")]
     fn zero_window_panics() {
-        Stft::builder(0, 1);
+        let _ = Stft::builder(0, 1);
     }
 
     #[test]
     #[should_panic(expected = "hop_size must be > 0")]
     fn zero_hop_panics() {
-        Stft::builder(16, 0);
+        let _ = Stft::builder(16, 0);
     }
 
     #[test]
     #[should_panic(expected = "hop_size must be <= window_size")]
     fn hop_larger_than_window_panics() {
-        Stft::builder(16, 32);
+        let _ = Stft::builder(16, 32);
     }
 
     #[test]
