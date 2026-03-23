@@ -92,6 +92,25 @@ impl AudioFile {
     ///
     /// Supports WAV, MP3, FLAC, and OGG/Vorbis. The entire file is decoded
     /// into memory as f32 samples.
+    /// Create an `AudioFile` from raw f32 samples (mono).
+    ///
+    /// Useful for synthesised signals or data that is already decoded.
+    #[must_use]
+    pub fn from_samples(samples: Vec<f32>, sample_rate: u32, channels: u16) -> Self {
+        let mono = downmix_to_mono(&samples, channels);
+        Self {
+            samples_interleaved: samples,
+            samples_mono: mono,
+            sample_rate,
+            channels,
+            config: AnalysisConfig::default(),
+        }
+    }
+
+    /// Open and decode an audio file.
+    ///
+    /// Supports WAV, MP3, FLAC, and OGG/Vorbis. The entire file is decoded
+    /// into memory as f32 samples.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, AudioError> {
         let path = path.as_ref();
         let file = std::fs::File::open(path)?;
