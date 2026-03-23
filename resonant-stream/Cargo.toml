@@ -10,8 +10,8 @@ categories = ["multimedia::audio", "asynchronous"]
 keywords = ["dsp", "streaming", "audio", "pipeline", "async"]
 
 [dependencies]
-resonant-fft = { version = "0.0.1", path = "../resonant-fft" }
-resonant-filters = { version = "0.0.1", path = "../resonant-filters" }
+resonant-fft = { version = "0.0.2", path = "../resonant-fft" }
+resonant-filters = { version = "0.0.2", path = "../resonant-filters" }
 
 [features]
 default = []
