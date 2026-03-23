@@ -13,6 +13,8 @@
 
 pub mod audio_file;
 pub mod error;
+pub mod frequency_bin;
 
 pub use audio_file::AudioFile;
 pub use error::AudioError;
+pub use frequency_bin::FrequencyBin;
