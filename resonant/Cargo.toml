@@ -15,6 +15,9 @@ resonant-fft = { version = "0.0.2", path = "../resonant-fft" }
 resonant-filters = { version = "0.0.2", path = "../resonant-filters" }
 resonant-stream = { version = "0.0.1", path = "../resonant-stream" }
 resonant-analysis = { version = "0.0.1", path = "../resonant-analysis" }
+symphonia = { version = "0.5", default-features = false, features = [
+    "wav", "pcm", "mp3", "flac", "ogg", "vorbis",
+] }
 
 [features]
 default = []
