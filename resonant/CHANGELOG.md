@@ -15,3 +15,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `AudioError` enum with `Io`, `UnsupportedFormat`, `Decode`, `NoTrack`, `InvalidParameter`, `Fft` variants
 - `FrequencyBin` struct with `frequency_hz`, `magnitude`, `phase`, and `db()` method
 - `AudioFile::fft()` — full-signal FFT with Hann window and labelled frequency bins
+- Builder methods: `with_window_size()`, `with_overlap()`, `with_window_fn()`, `with_db_scale()`
+- `WindowFn` type alias for window function pointers

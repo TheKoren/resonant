@@ -27,10 +27,52 @@ use resonant_fft::{SignalFftExt, SignalFreqExt};
 use crate::error::AudioError;
 use crate::frequency_bin::FrequencyBin;
 
+/// Type alias for window functions accepted by the builder.
+///
+/// A window function takes a mutable slice and multiplies in-place.
+pub type WindowFn = fn(&mut [f32]);
+
+/// Analysis parameters used by [`AudioFile::fft()`] and
+/// [`AudioFile::fft_stream()`].
+#[derive(Debug, Clone)]
+struct AnalysisConfig {
+    /// FFT window size in samples. `None` means use the full signal length.
+    window_size: Option<usize>,
+    /// Overlap ratio (0.0–1.0). Only used by `fft_stream()`.
+    overlap: f32,
+    /// Window function applied before FFT.
+    window_fn: WindowFn,
+    /// Whether to return magnitudes in dB.
+    db_scale: bool,
+}
+
+impl Default for AnalysisConfig {
+    fn default() -> Self {
+        Self {
+            window_size: None,
+            overlap: 0.5,
+            window_fn: window::hann,
+            db_scale: false,
+        }
+    }
+}
+
 /// A decoded audio file ready for analysis.
 ///
 /// Stores the full decoded audio as f32 samples. Provides both the original
 /// interleaved multichannel data and a mono downmix for analysis APIs.
+///
+/// # Builder methods
+///
+/// Configure analysis parameters before calling [`fft()`](AudioFile::fft):
+///
+/// ```rust,ignore
+/// let bins = AudioFile::open("track.wav")?
+///     .with_window_size(4096)
+///     .with_overlap(0.75)
+///     .with_db_scale(true)
+///     .fft()?;
+/// ```
 #[derive(Debug, Clone)]
 pub struct AudioFile {
     /// Interleaved samples (all channels).
@@ -41,6 +83,8 @@ pub struct AudioFile {
     sample_rate: u32,
     /// Number of channels.
     channels: u16,
+    /// Analysis configuration.
+    config: AnalysisConfig,
 }
 
 impl AudioFile {
@@ -126,6 +170,7 @@ impl AudioFile {
             samples_mono: mono,
             sample_rate,
             channels,
+            config: AnalysisConfig::default(),
         })
     }
 
@@ -175,12 +220,63 @@ impl AudioFile {
         self.samples_mono.len()
     }
 
-    /// Compute the FFT of the entire mono signal, returning labelled frequency bins.
+    // --- Builder methods ---
+
+    /// Set the FFT window size in samples.
     ///
-    /// Applies a Hann window before the FFT. Returns only the positive-frequency
-    /// half (bins 0 through N/2), where N is the number of mono samples.
+    /// When set, [`fft()`](Self::fft) analyses only the first `size` samples
+    /// (zero-padded if the signal is shorter). When `None` (the default), the
+    /// entire signal is used.
+    #[must_use]
+    pub fn with_window_size(mut self, size: usize) -> Self {
+        self.config.window_size = Some(size);
+        self
+    }
+
+    /// Set the overlap ratio for [`fft_stream()`](Self::fft_stream).
     ///
-    /// Each bin is labelled with its centre frequency in Hz.
+    /// Must be in the range `0.0..1.0`. Default is `0.5` (50% overlap).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `overlap` is outside `0.0..1.0`.
+    #[must_use]
+    pub fn with_overlap(mut self, overlap: f32) -> Self {
+        assert!(
+            (0.0..1.0).contains(&overlap),
+            "overlap must be in 0.0..1.0, got {overlap}"
+        );
+        self.config.overlap = overlap;
+        self
+    }
+
+    /// Set the window function applied before the FFT.
+    ///
+    /// Default is [`resonant_core::window::hann`]. Any function with signature
+    /// `fn(&mut [f32])` is accepted.
+    #[must_use]
+    pub fn with_window_fn(mut self, f: WindowFn) -> Self {
+        self.config.window_fn = f;
+        self
+    }
+
+    /// Enable or disable dB-scale magnitudes in the output.
+    ///
+    /// When `true`, [`FrequencyBin::magnitude`] contains
+    /// `20 * log10(linear_magnitude)` instead of the linear value.
+    /// Default is `false`.
+    #[must_use]
+    pub fn with_db_scale(mut self, enabled: bool) -> Self {
+        self.config.db_scale = enabled;
+        self
+    }
+
+    // --- Analysis methods ---
+
+    /// Compute the FFT of the mono signal, returning labelled frequency bins.
+    ///
+    /// Uses the configured window size, window function, and dB-scale setting.
+    /// Returns only the positive-frequency half (bins 0 through N/2).
     ///
     /// # Errors
     ///
@@ -192,9 +288,15 @@ impl AudioFile {
             return Ok(Vec::new());
         }
 
-        // Copy and apply Hann window
-        let mut windowed: Vec<f32> = mono.to_vec();
-        window::hann(&mut windowed);
+        let fft_size = self.config.window_size.unwrap_or(mono.len());
+
+        // Take up to fft_size samples, zero-pad if needed
+        let mut windowed = vec![0.0_f32; fft_size];
+        let copy_len = mono.len().min(fft_size);
+        windowed[..copy_len].copy_from_slice(&mono[..copy_len]);
+
+        // Apply window function
+        (self.config.window_fn)(&mut windowed);
 
         // Run FFT via the type-state extension trait
         let signal = Signal::from_samples(windowed);
@@ -207,12 +309,20 @@ impl AudioFile {
         let num_bins = n / 2 + 1;
         let rate = self.sample_rate as f32;
         let n_f = n as f32;
+        let db = self.config.db_scale;
 
         let bins: Vec<FrequencyBin> = (0..num_bins)
-            .map(|k| FrequencyBin {
-                frequency_hz: k as f32 * rate / n_f,
-                magnitude: magnitudes[k],
-                phase: phases[k],
+            .map(|k| {
+                let mag = magnitudes[k];
+                FrequencyBin {
+                    frequency_hz: k as f32 * rate / n_f,
+                    magnitude: if db {
+                        20.0 * mag.max(f32::MIN_POSITIVE).log10()
+                    } else {
+                        mag
+                    },
+                    phase: phases[k],
+                }
             })
             .collect();
 
@@ -358,6 +468,7 @@ mod tests {
             samples_mono: samples,
             sample_rate,
             channels: 1,
+            config: AnalysisConfig::default(),
         };
 
         let bins = audio.fft().ok();
@@ -393,9 +504,109 @@ mod tests {
             samples_mono: Vec::new(),
             sample_rate: 44100,
             channels: 1,
+            config: AnalysisConfig::default(),
         };
         let bins = audio.fft();
         assert!(bins.is_ok());
         assert!(bins.ok().map_or(false, |b| b.is_empty()));
+    }
+
+    // --- Builder tests ---
+
+    fn make_sine(n: usize, freq_hz: f32, sample_rate: u32) -> AudioFile {
+        let mut samples = vec![0.0_f32; n];
+        for (i, s) in samples.iter_mut().enumerate() {
+            *s = (2.0 * std::f32::consts::PI * freq_hz * i as f32 / sample_rate as f32).sin();
+        }
+        AudioFile {
+            samples_interleaved: samples.clone(),
+            samples_mono: samples,
+            sample_rate,
+            channels: 1,
+            config: AnalysisConfig::default(),
+        }
+    }
+
+    #[test]
+    fn builder_window_size() {
+        let audio = make_sine(8192, 1000.0, 44100).with_window_size(4096);
+        let bins = audio.fft();
+        assert!(bins.is_ok());
+        // 4096-point FFT → 2049 bins
+        assert_eq!(bins.ok().map(|b| b.len()), Some(4096 / 2 + 1));
+    }
+
+    #[test]
+    fn builder_window_size_zero_pads() {
+        // Signal shorter than window_size → zero-padded
+        let audio = make_sine(512, 1000.0, 44100).with_window_size(1024);
+        let bins = audio.fft();
+        assert!(bins.is_ok());
+        assert_eq!(bins.ok().map(|b| b.len()), Some(1024 / 2 + 1));
+    }
+
+    #[test]
+    fn builder_db_scale() {
+        let audio = make_sine(4096, 1000.0, 44100);
+        let linear_bins = audio.clone().fft();
+        let db_bins = audio.with_db_scale(true).fft();
+
+        assert!(linear_bins.is_ok());
+        assert!(db_bins.is_ok());
+
+        if let (Ok(lin), Ok(db)) = (linear_bins, db_bins) {
+            // dB values should be 20*log10 of linear values
+            for (l, d) in lin.iter().zip(db.iter()) {
+                let expected_db = 20.0 * l.magnitude.max(f32::MIN_POSITIVE).log10();
+                assert!(
+                    (d.magnitude - expected_db).abs() < 1e-4,
+                    "dB mismatch: got {}, expected {}",
+                    d.magnitude,
+                    expected_db
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn builder_window_fn() {
+        let audio_hann = make_sine(4096, 1000.0, 44100);
+        let audio_rect =
+            make_sine(4096, 1000.0, 44100).with_window_fn(resonant_core::window::rectangular);
+
+        let bins_hann = audio_hann.fft();
+        let bins_rect = audio_rect.fft();
+        assert!(bins_hann.is_ok());
+        assert!(bins_rect.is_ok());
+
+        // Rectangular window should produce different magnitudes than Hann
+        if let (Ok(h), Ok(r)) = (bins_hann, bins_rect) {
+            let hann_peak: f32 = h.iter().map(|b| b.magnitude).fold(0.0, f32::max);
+            let rect_peak: f32 = r.iter().map(|b| b.magnitude).fold(0.0, f32::max);
+            // Rectangular window preserves more energy at the peak
+            assert!(
+                rect_peak > hann_peak,
+                "Rectangular peak {rect_peak} should exceed Hann peak {hann_peak}"
+            );
+        }
+    }
+
+    #[test]
+    fn builder_overlap_bounds() {
+        // Valid overlap
+        let _ = make_sine(1024, 440.0, 44100).with_overlap(0.0);
+        let _ = make_sine(1024, 440.0, 44100).with_overlap(0.75);
+    }
+
+    #[test]
+    #[should_panic(expected = "overlap must be in 0.0..1.0")]
+    fn builder_overlap_too_high() {
+        let _ = make_sine(1024, 440.0, 44100).with_overlap(1.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "overlap must be in 0.0..1.0")]
+    fn builder_overlap_negative() {
+        let _ = make_sine(1024, 440.0, 44100).with_overlap(-0.1);
     }
 }
