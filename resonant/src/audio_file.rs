@@ -20,7 +20,12 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
+use resonant_core::signal::Signal;
+use resonant_core::window;
+use resonant_fft::{SignalFftExt, SignalFreqExt};
+
 use crate::error::AudioError;
+use crate::frequency_bin::FrequencyBin;
 
 /// A decoded audio file ready for analysis.
 ///
@@ -169,6 +174,50 @@ impl AudioFile {
     pub fn num_frames(&self) -> usize {
         self.samples_mono.len()
     }
+
+    /// Compute the FFT of the entire mono signal, returning labelled frequency bins.
+    ///
+    /// Applies a Hann window before the FFT. Returns only the positive-frequency
+    /// half (bins 0 through N/2), where N is the number of mono samples.
+    ///
+    /// Each bin is labelled with its centre frequency in Hz.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AudioError::Fft`] if the FFT backend rejects the input length
+    /// (e.g. non-power-of-two without the `rustfft` feature).
+    pub fn fft(&self) -> Result<Vec<FrequencyBin>, AudioError> {
+        let mono = self.samples_mono();
+        if mono.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Copy and apply Hann window
+        let mut windowed: Vec<f32> = mono.to_vec();
+        window::hann(&mut windowed);
+
+        // Run FFT via the type-state extension trait
+        let signal = Signal::from_samples(windowed);
+        let freq = signal.fft()?;
+
+        // Extract magnitude and phase
+        let magnitudes = freq.magnitude();
+        let phases = freq.phase();
+        let n = magnitudes.len();
+        let num_bins = n / 2 + 1;
+        let rate = self.sample_rate as f32;
+        let n_f = n as f32;
+
+        let bins: Vec<FrequencyBin> = (0..num_bins)
+            .map(|k| FrequencyBin {
+                frequency_hz: k as f32 * rate / n_f,
+                magnitude: magnitudes[k],
+                phase: phases[k],
+            })
+            .collect();
+
+        Ok(bins)
+    }
 }
 
 /// Average all channels down to mono.
@@ -253,5 +302,100 @@ mod tests {
             assert!(dur > 1.0, "Duration too short: {dur}");
             assert!(dur < 30.0, "Duration too long: {dur}");
         }
+    }
+
+    #[test]
+    fn fft_returns_bins() {
+        if let Ok(audio) = AudioFile::open("../assets/test.wav") {
+            let bins = audio.fft();
+            assert!(bins.is_ok(), "FFT failed: {:?}", bins.err());
+            let bins = bins.ok();
+            let n = audio.num_frames();
+            let expected_bins = n / 2 + 1;
+            assert_eq!(bins.as_ref().map(|b| b.len()), Some(expected_bins));
+        }
+    }
+
+    #[test]
+    fn fft_bin_frequencies_increase() {
+        if let Ok(audio) = AudioFile::open("../assets/test.wav") {
+            if let Ok(bins) = audio.fft() {
+                // Frequencies should be monotonically increasing
+                for pair in bins.windows(2) {
+                    assert!(
+                        pair[1].frequency_hz > pair[0].frequency_hz,
+                        "Bins not increasing: {} >= {}",
+                        pair[0].frequency_hz,
+                        pair[1].frequency_hz,
+                    );
+                }
+                // First bin is DC (0 Hz)
+                assert!((bins[0].frequency_hz).abs() < 1e-6);
+                // Last bin is near Nyquist
+                let nyquist = audio.sample_rate() as f32 / 2.0;
+                let last_freq = bins.last().map(|b| b.frequency_hz).unwrap_or(0.0);
+                assert!(
+                    (last_freq - nyquist).abs() < nyquist * 0.01,
+                    "Last bin {last_freq} Hz not near Nyquist {nyquist} Hz"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fft_known_sine() {
+        // Synthesise a 1 kHz sine at 44100 Hz, power-of-two length
+        let sample_rate = 44100_u32;
+        let n = 4096_usize;
+        let freq_hz = 1000.0_f32;
+        let mut samples = vec![0.0_f32; n];
+        for (i, s) in samples.iter_mut().enumerate() {
+            *s = (2.0 * std::f32::consts::PI * freq_hz * i as f32 / sample_rate as f32).sin();
+        }
+
+        let audio = AudioFile {
+            samples_interleaved: samples.clone(),
+            samples_mono: samples,
+            sample_rate,
+            channels: 1,
+        };
+
+        let bins = audio.fft().ok();
+        let bins = bins.as_ref();
+        assert!(bins.is_some());
+        let bins = bins.as_ref().map(|b| b.as_slice());
+
+        // Find the peak bin
+        if let Some(bins) = bins {
+            let peak = bins.iter().enumerate().max_by(|(_, a), (_, b)| {
+                a.magnitude
+                    .partial_cmp(&b.magnitude)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            if let Some((_, peak_bin)) = peak {
+                // Peak should be near 1000 Hz (within one bin width)
+                let bin_width = sample_rate as f32 / n as f32;
+                assert!(
+                    (peak_bin.frequency_hz - freq_hz).abs() < bin_width * 2.0,
+                    "Peak at {} Hz, expected near {} Hz",
+                    peak_bin.frequency_hz,
+                    freq_hz,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fft_empty_signal() {
+        let audio = AudioFile {
+            samples_interleaved: Vec::new(),
+            samples_mono: Vec::new(),
+            sample_rate: 44100,
+            channels: 1,
+        };
+        let bins = audio.fft();
+        assert!(bins.is_ok());
+        assert!(bins.ok().map_or(false, |b| b.is_empty()));
     }
 }
