@@ -2,6 +2,17 @@
 
 //! `resonant` — ergonomic audio DSP facade for Rust.
 //!
+//! Load an audio file and analyse it in one line:
+//!
 //! ```rust,ignore
-//! let result = AudioFile::open("track.mp3")?.fft()?;
+//! use resonant::AudioFile;
+//!
+//! let audio = AudioFile::open("track.wav")?;
+//! println!("Sample rate: {} Hz, duration: {:.1}s", audio.sample_rate(), audio.duration_secs());
 //! ```
+
+pub mod audio_file;
+pub mod error;
+
+pub use audio_file::AudioFile;
+pub use error::AudioError;
