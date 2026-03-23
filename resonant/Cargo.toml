@@ -11,8 +11,8 @@ keywords = ["dsp", "audio", "fft", "signal", "analysis"]
 
 [dependencies]
 resonant-core = { version = "0.0.2", path = "../resonant-core" }
-resonant-fft = { version = "0.0.1", path = "../resonant-fft" }
-resonant-filters = { version = "0.0.1", path = "../resonant-filters" }
+resonant-fft = { version = "0.0.2", path = "../resonant-fft" }
+resonant-filters = { version = "0.0.2", path = "../resonant-filters" }
 resonant-stream = { version = "0.0.1", path = "../resonant-stream" }
 resonant-analysis = { version = "0.0.1", path = "../resonant-analysis" }
 

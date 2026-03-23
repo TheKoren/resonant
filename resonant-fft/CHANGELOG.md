@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-03-23
+
 ### Added
 - Pure-core radix-2 Cooley-Tukey FFT (`radix2::fft`, `radix2::ifft`)
 - In-place, `no_std`, `no_alloc`, power-of-two sizes only
