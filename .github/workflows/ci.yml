@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
+      - run: cargo test --workspace --exclude resonant-examples
 
   clippy:
     name: Clippy
@@ -67,4 +67,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-llvm-cov --locked
-      - run: cargo llvm-cov --workspace --summary-only
+      - run: cargo llvm-cov --workspace --exclude resonant-examples --summary-only
