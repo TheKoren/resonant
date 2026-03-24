@@ -46,7 +46,9 @@
 mod chunk;
 mod error;
 mod node;
+mod pipeline;
 
 pub use chunk::Chunk;
 pub use error::StreamError;
 pub use node::DspNode;
+pub use pipeline::{Pipeline, PipelineBuilder};
