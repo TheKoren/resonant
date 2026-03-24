@@ -1,15 +1,16 @@
 [package]
 name = "resonant-stream"
-description = "Async streaming DSP pipeline with backpressure and zero-copy chunks"
+description = "Streaming DSP pipeline with pull-based processing and in-place chunks"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-categories = ["multimedia::audio", "asynchronous"]
-keywords = ["dsp", "streaming", "audio", "pipeline", "async"]
+categories = ["multimedia::audio"]
+keywords = ["dsp", "streaming", "audio", "pipeline"]
 
 [dependencies]
+resonant-core = { version = "0.0.2", path = "../resonant-core", default-features = false, features = ["alloc"] }
 resonant-fft = { version = "0.0.2", path = "../resonant-fft" }
 resonant-filters = { version = "0.0.2", path = "../resonant-filters" }
 
