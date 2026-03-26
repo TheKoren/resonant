@@ -46,6 +46,8 @@
 mod chunk;
 mod error;
 mod node;
+/// Built-in processing nodes.
+pub mod nodes;
 mod pipeline;
 
 pub use chunk::Chunk;
