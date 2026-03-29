@@ -10,6 +10,7 @@ categories = ["multimedia::audio", "science"]
 keywords = ["dsp", "audio", "analysis", "pitch", "beat"]
 
 [dependencies]
+resonant-core = { version = "0.0.2", path = "../resonant-core", default-features = false, features = ["alloc"] }
 resonant-fft = { version = "0.0.2", path = "../resonant-fft" }
 resonant-filters = { version = "0.0.2", path = "../resonant-filters" }
 
