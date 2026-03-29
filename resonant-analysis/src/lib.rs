@@ -19,6 +19,8 @@
 //! ```
 
 pub mod error;
+/// Mel-frequency cepstral coefficients (MFCCs).
+pub mod mfcc;
 /// Onset detection via spectral flux and adaptive thresholding.
 pub mod onset;
 /// Pitch estimation using the YIN algorithm.
