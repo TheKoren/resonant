@@ -25,5 +25,7 @@ pub mod onset;
 pub mod pitch;
 /// Spectral feature extraction: centroid, spread, flatness, rolloff.
 pub mod spectral;
+/// Tempo estimation via autocorrelation of onset strength envelope.
+pub mod tempo;
 
 pub use error::AnalysisError;
