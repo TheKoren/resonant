@@ -31,6 +31,9 @@
 //! resonant-fft = { version = "...", default-features = false }
 //! ```
 
+/// Discrete Cosine Transform — types II and III.
+pub mod dct;
+
 /// Pure-core radix-2 FFT implementation (power-of-two sizes, no allocation).
 pub mod radix2;
 
