@@ -19,6 +19,8 @@
 //! ```
 
 pub mod error;
+/// Pitch estimation using the YIN algorithm.
+pub mod pitch;
 /// Spectral feature extraction: centroid, spread, flatness, rolloff.
 pub mod spectral;
 
