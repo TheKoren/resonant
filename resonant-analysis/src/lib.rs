@@ -19,6 +19,8 @@
 //! ```
 
 pub mod error;
+/// Onset detection via spectral flux and adaptive thresholding.
+pub mod onset;
 /// Pitch estimation using the YIN algorithm.
 pub mod pitch;
 /// Spectral feature extraction: centroid, spread, flatness, rolloff.
