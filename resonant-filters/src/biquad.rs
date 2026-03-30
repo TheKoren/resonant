@@ -28,8 +28,10 @@ pub struct BiquadCoeffs {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct BiquadState {
     /// First delay element.
+    #[doc(hidden)]
     pub s1: f32,
     /// Second delay element.
+    #[doc(hidden)]
     pub s2: f32,
 }
 
