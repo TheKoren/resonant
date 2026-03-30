@@ -17,6 +17,8 @@ pub enum AudioError {
     InvalidParameter(String),
     /// FFT operation failed.
     Fft(resonant_fft::FftError),
+    /// An analysis operation failed.
+    Analysis(resonant_analysis::AnalysisError),
 }
 
 impl fmt::Display for AudioError {
@@ -28,6 +30,7 @@ impl fmt::Display for AudioError {
             Self::NoTrack => write!(f, "no audio track found in file"),
             Self::InvalidParameter(msg) => write!(f, "invalid parameter: {msg}"),
             Self::Fft(e) => write!(f, "FFT error: {e}"),
+            Self::Analysis(e) => write!(f, "analysis error: {e}"),
         }
     }
 }
@@ -51,6 +54,12 @@ impl From<std::io::Error> for AudioError {
 impl From<resonant_fft::FftError> for AudioError {
     fn from(e: resonant_fft::FftError) -> Self {
         Self::Fft(e)
+    }
+}
+
+impl From<resonant_analysis::AnalysisError> for AudioError {
+    fn from(e: resonant_analysis::AnalysisError) -> Self {
+        Self::Analysis(e)
     }
 }
 

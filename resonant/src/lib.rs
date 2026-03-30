@@ -31,7 +31,7 @@ pub mod error;
 pub mod frequency_bin;
 
 // === Facade types ===
-pub use audio_file::{AudioFile, FftFrameIter, WindowFn};
+pub use audio_file::{AnalysisResult, AudioFile, FftFrameIter, WindowFn};
 pub use error::AudioError;
 pub use frequency_bin::FrequencyBin;
 
@@ -58,3 +58,11 @@ pub use resonant_filters::{Biquad, BiquadCoeffs};
 
 /// Butterworth filter design helpers.
 pub use resonant_filters::design;
+
+// === resonant-analysis re-exports ===
+
+/// Audio analysis error type.
+pub use resonant_analysis::AnalysisError;
+
+/// High-level analysis modules.
+pub use resonant_analysis::{chroma, mfcc, onset, pitch, spectral, tempo};

@@ -20,12 +20,39 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
+use resonant_analysis::chroma::{ChromaExtractor, ChromaVector};
+use resonant_analysis::mfcc::{MfccExtractor, MfccFrame};
+use resonant_analysis::onset::{Onset, OnsetDetector};
+use resonant_analysis::pitch::{PitchEstimate, YinEstimator};
+use resonant_analysis::spectral;
+use resonant_analysis::tempo::{TempoEstimate, TempoEstimator};
 use resonant_core::signal::Signal;
 use resonant_core::window;
 use resonant_fft::{SignalFftExt, SignalFreqExt};
 
 use crate::error::AudioError;
 use crate::frequency_bin::FrequencyBin;
+
+/// Result of running all analysis algorithms on an audio file.
+///
+/// Returned by [`AudioFile::analyse()`].
+#[derive(Debug, Clone)]
+pub struct AnalysisResult {
+    /// Estimated tempo in BPM with confidence.
+    pub tempo: TempoEstimate,
+    /// Detected onsets (note/beat boundaries).
+    pub onsets: Vec<Onset>,
+    /// Pitch estimate (fundamental frequency) of the full signal.
+    pub pitch: PitchEstimate,
+    /// MFCC frames (one per STFT frame).
+    pub mfcc: Vec<MfccFrame>,
+    /// Chroma vectors (one per STFT frame).
+    pub chroma: Vec<ChromaVector>,
+    /// Spectral centroid of the full-signal magnitude spectrum.
+    pub spectral_centroid: f32,
+    /// Spectral flatness of the full-signal magnitude spectrum.
+    pub spectral_flatness: f32,
+}
 
 /// Type alias for window functions accepted by the builder.
 ///
@@ -380,6 +407,45 @@ impl AudioFile {
             sample_rate: self.sample_rate,
             db_scale: self.config.db_scale,
             offset: 0,
+        })
+    }
+
+    /// Run all analysis algorithms on the mono signal at once.
+    ///
+    /// Returns an [`AnalysisResult`] containing tempo, onsets, pitch, MFCCs,
+    /// chroma features, and spectral descriptors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AudioError::Analysis`] if any analysis step fails (e.g.
+    /// empty input).
+    pub fn analyse(&self) -> Result<AnalysisResult, AudioError> {
+        let mono = self.samples_mono();
+        let sr = self.sample_rate as f32;
+
+        let tempo = TempoEstimator::new(sr).estimate(mono)?;
+        let onsets = OnsetDetector::new(sr).detect(mono)?;
+        let pitch = YinEstimator::new(sr).estimate(mono)?;
+        let mfcc = MfccExtractor::new(sr).extract(mono)?;
+        let chroma = ChromaExtractor::new(sr).extract(mono)?;
+
+        // Spectral features from the full-signal FFT magnitude
+        let fft_bins = self.fft()?;
+        let magnitudes: Vec<f32> = fft_bins.iter().map(|b| b.magnitude).collect();
+        let frequencies: Vec<f32> = fft_bins.iter().map(|b| b.frequency_hz).collect();
+
+        let spectral_centroid =
+            spectral::spectral_centroid(&magnitudes, &frequencies).unwrap_or(0.0);
+        let spectral_flatness = spectral::spectral_flatness(&magnitudes).unwrap_or(0.0);
+
+        Ok(AnalysisResult {
+            tempo,
+            onsets,
+            pitch,
+            mfcc,
+            chroma,
+            spectral_centroid,
+            spectral_flatness,
         })
     }
 }
@@ -820,6 +886,71 @@ mod tests {
                 // All dB magnitudes should be negative or zero for a sine wave
                 // (magnitude ≤ window_size/2)
                 assert!(frame.iter().all(|b| b.magnitude <= 100.0));
+            }
+        }
+    }
+
+    // --- analyse() tests ---
+
+    #[test]
+    fn analyse_from_samples() {
+        // Synthesise a 120 BPM click track with a 440 Hz tone
+        let sample_rate = 44100_u32;
+        let duration_secs = 3.0;
+        let total = (duration_secs * sample_rate as f32) as usize;
+        let mut samples = vec![0.0_f32; total];
+        let interval = (60.0 / 120.0 * sample_rate as f32) as usize;
+        let mut pos = 0;
+        while pos < total {
+            for j in 0..64 {
+                if pos + j < total {
+                    samples[pos + j] =
+                        (2.0 * std::f32::consts::PI * 440.0 * j as f32 / sample_rate as f32).sin();
+                }
+            }
+            pos += interval;
+        }
+
+        let audio = AudioFile::from_samples(samples, sample_rate, 1);
+        let result = audio.analyse();
+        assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
+
+        let r = result.ok();
+        let r = r.as_ref();
+
+        // Tempo should be detected
+        assert!(r.map_or(false, |r| r.tempo.bpm > 0.0));
+
+        // Onsets should be detected
+        assert!(r.map_or(false, |r| !r.onsets.is_empty()));
+
+        // MFCCs should have frames with 13 coefficients
+        assert!(r.map_or(false, |r| !r.mfcc.is_empty()));
+        assert!(r.map_or(false, |r| r.mfcc[0].coefficients.len() == 13));
+
+        // Chroma should have frames
+        assert!(r.map_or(false, |r| !r.chroma.is_empty()));
+
+        // Spectral centroid should be positive
+        assert!(r.map_or(false, |r| r.spectral_centroid > 0.0));
+
+        // Spectral flatness in [0, 1]
+        assert!(r.map_or(false, |r| r.spectral_flatness >= 0.0
+            && r.spectral_flatness <= 1.0));
+    }
+
+    #[test]
+    fn analyse_wav_file() {
+        if let Ok(audio) = AudioFile::open("../assets/test.wav") {
+            let result = audio.analyse();
+            assert!(
+                result.is_ok(),
+                "analyse() on test.wav failed: {:?}",
+                result.err()
+            );
+            if let Ok(r) = &result {
+                assert!(r.tempo.bpm > 0.0 || r.tempo.confidence == 0.0);
+                assert!(r.spectral_centroid >= 0.0);
             }
         }
     }
