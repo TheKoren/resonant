@@ -23,9 +23,7 @@ use crate::FftError;
 /// # Errors
 ///
 /// Returns [`FftError::Empty`] if `input` is empty, or
-/// [`FftError::NotPowerOfTwo`] if `input` and `output` lengths differ.
-/// (The name is a misnomer inherited from the shared error type — here it
-/// simply means "length mismatch".)
+/// [`FftError::LengthMismatch`] if `input` and `output` lengths differ.
 ///
 /// # Examples
 ///
@@ -103,7 +101,10 @@ fn validate(input: &[f32], output: &[f32]) -> Result<(), FftError> {
         return Err(FftError::Empty);
     }
     if input.len() != output.len() {
-        return Err(FftError::NotPowerOfTwo(input.len()));
+        return Err(FftError::LengthMismatch {
+            input: input.len(),
+            output: output.len(),
+        });
     }
     Ok(())
 }
@@ -145,7 +146,13 @@ mod tests {
         let input = [1.0_f32; 4];
         let mut output = [0.0_f32; 3];
         let err = dct_ii(&input, &mut output);
-        assert!(err.is_err());
+        assert_eq!(
+            err,
+            Err(FftError::LengthMismatch {
+                input: 4,
+                output: 3
+            })
+        );
     }
 
     #[test]

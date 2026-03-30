@@ -75,6 +75,7 @@ impl Chunk {
     }
 
     /// Replaces the sample data, reusing this chunk's metadata.
+    #[doc(hidden)]
     #[inline]
     pub fn set_data(&mut self, data: Vec<f32>) {
         self.data = data;

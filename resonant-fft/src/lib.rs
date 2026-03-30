@@ -58,6 +58,13 @@ pub enum FftError {
     NotPowerOfTwo(usize),
     /// Input is empty.
     Empty,
+    /// Input and output buffer lengths do not match.
+    LengthMismatch {
+        /// Length of the input buffer.
+        input: usize,
+        /// Length of the output buffer.
+        output: usize,
+    },
 }
 
 impl core::fmt::Display for FftError {
@@ -65,6 +72,9 @@ impl core::fmt::Display for FftError {
         match self {
             Self::NotPowerOfTwo(n) => write!(f, "FFT length {n} is not a power of two"),
             Self::Empty => write!(f, "FFT input is empty"),
+            Self::LengthMismatch { input, output } => {
+                write!(f, "buffer length mismatch: input {input}, output {output}")
+            }
         }
     }
 }

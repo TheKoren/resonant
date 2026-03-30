@@ -71,6 +71,7 @@ impl<T, D: Domain> Signal<T, D> {
     }
 
     /// Returns a mutable reference to the underlying data.
+    #[doc(hidden)]
     #[inline]
     pub fn data_mut(&mut self) -> &mut T {
         &mut self.data
@@ -88,6 +89,7 @@ impl<T, D: Domain> Signal<T, D> {
     /// This is the mechanism by which transforms (FFT, IFFT) transition
     /// between domains. Typically called by transform implementations,
     /// not end users.
+    #[doc(hidden)]
     #[inline]
     #[must_use]
     pub fn map_domain<D2: Domain>(self) -> Signal<T, D2> {
