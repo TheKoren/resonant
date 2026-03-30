@@ -18,6 +18,8 @@
 //! let flatness = spectral::spectral_flatness(&magnitudes).unwrap();
 //! ```
 
+/// Chroma features — 12-bin pitch class profiles.
+pub mod chroma;
 pub mod error;
 /// Mel-frequency cepstral coefficients (MFCCs).
 pub mod mfcc;
