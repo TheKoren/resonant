@@ -130,7 +130,11 @@ pub trait SignalFreqExt {
 
 impl<T: AsRef<[Complex<f32>]>> SignalFreqExt for Signal<T, FreqDomain> {
     fn magnitude(&self) -> Vec<f32> {
-        self.data().as_ref().iter().map(|c| c.norm()).collect()
+        let bins = self.data().as_ref();
+        let flat = complex_as_flat(bins);
+        let mut out = vec![0.0_f32; bins.len()];
+        crate::simd::magnitude(flat, &mut out);
+        out
     }
 
     fn phase(&self) -> Vec<f32> {
@@ -138,8 +142,22 @@ impl<T: AsRef<[Complex<f32>]>> SignalFreqExt for Signal<T, FreqDomain> {
     }
 
     fn magnitude_squared(&self) -> Vec<f32> {
-        self.data().as_ref().iter().map(|c| c.norm_sqr()).collect()
+        let bins = self.data().as_ref();
+        let flat = complex_as_flat(bins);
+        let mut out = vec![0.0_f32; bins.len()];
+        crate::simd::magnitude_squared(flat, &mut out);
+        out
     }
+}
+
+/// Reinterpret `&[Complex<f32>]` as `&[f32]` with twice the length.
+///
+/// `Complex<f32>` is `#[repr(C)]` with layout `(re: f32, im: f32)`,
+/// so this is a safe zero-copy view.
+fn complex_as_flat(bins: &[Complex<f32>]) -> &[f32] {
+    // SAFETY: Complex<f32> is #[repr(C)] and has the same alignment as f32.
+    // The resulting slice has exactly 2 * bins.len() f32 elements.
+    unsafe { core::slice::from_raw_parts(bins.as_ptr().cast::<f32>(), bins.len() * 2) }
 }
 
 /// Dispatches to the best available backend.
