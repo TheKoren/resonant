@@ -523,13 +523,23 @@ impl<'a> Iterator for FftFrameIter<'a> {
 impl<'a> ExactSizeIterator for FftFrameIter<'a> {}
 
 /// Average all channels down to mono.
+///
+/// The stereo (2-channel) case uses a SIMD-accelerated path on x86_64 and
+/// aarch64. Arbitrary channel counts fall back to scalar summation.
 fn downmix_to_mono(interleaved: &[f32], channels: u16) -> Vec<f32> {
     if channels <= 1 {
         return interleaved.to_vec();
     }
-    let ch = channels as usize;
+    if channels == 2 {
+        return downmix_stereo(interleaved);
+    }
+    downmix_generic(interleaved, channels as usize)
+}
+
+/// Scalar N-channel downmix.
+fn downmix_generic(interleaved: &[f32], ch: usize) -> Vec<f32> {
     let num_frames = interleaved.len() / ch;
-    let scale = 1.0 / channels as f32;
+    let scale = 1.0 / ch as f32;
     let mut mono = Vec::with_capacity(num_frames);
     for frame in 0..num_frames {
         let start = frame * ch;
@@ -540,6 +550,102 @@ fn downmix_to_mono(interleaved: &[f32], channels: u16) -> Vec<f32> {
         mono.push(sum * scale);
     }
     mono
+}
+
+/// SIMD-accelerated stereo-to-mono downmix.
+fn downmix_stereo(interleaved: &[f32]) -> Vec<f32> {
+    let num_frames = interleaved.len() / 2;
+    let mut mono = vec![0.0_f32; num_frames];
+    dispatch_stereo_downmix(interleaved, &mut mono);
+    mono
+}
+
+#[cfg(target_arch = "x86_64")]
+fn dispatch_stereo_downmix(interleaved: &[f32], mono: &mut [f32]) {
+    downmix_stereo_x86(interleaved, mono);
+}
+
+#[cfg(target_arch = "aarch64")]
+fn dispatch_stereo_downmix(interleaved: &[f32], mono: &mut [f32]) {
+    downmix_stereo_neon(interleaved, mono);
+}
+
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+fn dispatch_stereo_downmix(interleaved: &[f32], mono: &mut [f32]) {
+    downmix_stereo_scalar(interleaved, mono);
+}
+
+#[allow(dead_code)] // fallback for non-x86/non-aarch64
+fn downmix_stereo_scalar(interleaved: &[f32], mono: &mut [f32]) {
+    for (i, o) in mono.iter_mut().enumerate() {
+        *o = (interleaved[i * 2] + interleaved[i * 2 + 1]) * 0.5;
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+fn downmix_stereo_x86(interleaved: &[f32], mono: &mut [f32]) {
+    use std::arch::x86_64::*;
+
+    let num_frames = mono.len();
+    let chunks = num_frames / 4;
+    let remainder = num_frames % 4;
+
+    // SAFETY: SSE2 is guaranteed on x86_64. We load 8 f32s (4 stereo frames)
+    // per iteration and produce 4 mono samples.
+    unsafe {
+        let half = _mm_set1_ps(0.5);
+        for i in 0..chunks {
+            let f_off = i * 8;
+            let o_off = i * 4;
+
+            // Load [L0,R0,L1,R1] and [L2,R2,L3,R3]
+            let v0 = _mm_loadu_ps(interleaved.as_ptr().add(f_off));
+            let v1 = _mm_loadu_ps(interleaved.as_ptr().add(f_off + 4));
+
+            // Deinterleave: lefts = [L0,L1,L2,L3], rights = [R0,R1,R2,R3]
+            let lefts = _mm_shuffle_ps::<0b10_00_10_00>(v0, v1);
+            let rights = _mm_shuffle_ps::<0b11_01_11_01>(v0, v1);
+
+            let sum = _mm_mul_ps(_mm_add_ps(lefts, rights), half);
+            _mm_storeu_ps(mono.as_mut_ptr().add(o_off), sum);
+        }
+    }
+
+    // Scalar tail
+    let tail_start = chunks * 4;
+    for i in 0..remainder {
+        let idx = (tail_start + i) * 2;
+        mono[tail_start + i] = (interleaved[idx] + interleaved[idx + 1]) * 0.5;
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+fn downmix_stereo_neon(interleaved: &[f32], mono: &mut [f32]) {
+    use std::arch::aarch64::*;
+
+    let num_frames = mono.len();
+    let chunks = num_frames / 4;
+    let remainder = num_frames % 4;
+
+    // SAFETY: NEON is guaranteed on aarch64. vld2q_f32 deinterleaves 8 f32s
+    // into two 4-wide vectors (lefts and rights).
+    unsafe {
+        let half = vdupq_n_f32(0.5);
+        for i in 0..chunks {
+            let f_off = i * 8;
+            let o_off = i * 4;
+
+            let pair = vld2q_f32(interleaved.as_ptr().add(f_off));
+            let sum = vmulq_f32(vaddq_f32(pair.0, pair.1), half);
+            vst1q_f32(mono.as_mut_ptr().add(o_off), sum);
+        }
+    }
+
+    let tail_start = chunks * 4;
+    for i in 0..remainder {
+        let idx = (tail_start + i) * 2;
+        mono[tail_start + i] = (interleaved[idx] + interleaved[idx + 1]) * 0.5;
+    }
 }
 
 #[cfg(test)]
