@@ -42,6 +42,7 @@ pub mod radix2;
 pub mod rustfft_backend;
 
 mod ext;
+pub(crate) mod simd;
 
 /// Short-Time Fourier Transform with overlap-add reconstruction.
 pub mod stft;
