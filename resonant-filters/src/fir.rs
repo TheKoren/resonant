@@ -86,10 +86,10 @@ impl Fir {
         for sample in buf.iter_mut() {
             self.delay[self.pos] = *sample;
 
-            // Linearize: newest sample first, oldest last
-            let after = self.pos + 1; // number of elements from start..=pos
-            // [pos, pos-1, ..., 0, len-1, len-2, ..., pos+1]
-            // First part: delay[pos..=0] reversed = delay[0..=pos] reversed
+            // Linearize: newest sample first, oldest last.
+            // Layout: [pos, pos-1, ..., 0, len-1, len-2, ..., pos+1]
+            let after = self.pos + 1;
+            // First part: delay[0..=pos] reversed
             scratch[..after].copy_from_slice(&self.delay[..after]);
             scratch[..after].reverse();
             // Second part: delay[pos+1..len] reversed

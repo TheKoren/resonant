@@ -144,6 +144,32 @@ pub fn bartlett(samples: &mut [f32]) {
     }
 }
 
+/// Applies a precomputed window to a sample buffer via element-wise multiply.
+///
+/// This is useful when the same window shape is reused across many frames —
+/// compute the window once, then call `apply` each time instead of
+/// recomputing cosines.
+///
+/// Uses SIMD acceleration where available (SSE on x86_64, NEON on aarch64).
+///
+/// # Panics
+///
+/// Panics if `samples` and `window` have different lengths.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_core::window;
+///
+/// let mut buf = [1.0_f32; 4];
+/// let win = [0.0, 0.5, 1.0, 0.5];
+/// window::apply(&mut buf, &win);
+/// assert_eq!(buf, [0.0, 0.5, 1.0, 0.5]);
+/// ```
+pub fn apply(samples: &mut [f32], window: &[f32]) {
+    crate::simd::multiply_buffers(samples, window);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
