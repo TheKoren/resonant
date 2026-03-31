@@ -75,9 +75,31 @@ impl Fir {
     }
 
     /// Filters an entire buffer in-place.
+    ///
+    /// For each sample, the circular delay line is linearized into a
+    /// contiguous scratch buffer so the convolution can use a SIMD
+    /// dot product.
     pub fn process_buf(&mut self, buf: &mut [f32]) {
+        let len = self.coeffs.len();
+        let mut scratch = vec![0.0_f32; len];
+
         for sample in buf.iter_mut() {
-            *sample = self.process_sample(*sample);
+            self.delay[self.pos] = *sample;
+
+            // Linearize: newest sample first, oldest last
+            let after = self.pos + 1; // number of elements from start..=pos
+            // [pos, pos-1, ..., 0, len-1, len-2, ..., pos+1]
+            // First part: delay[pos..=0] reversed = delay[0..=pos] reversed
+            scratch[..after].copy_from_slice(&self.delay[..after]);
+            scratch[..after].reverse();
+            // Second part: delay[pos+1..len] reversed
+            if after < len {
+                scratch[after..].copy_from_slice(&self.delay[after..]);
+                scratch[after..].reverse();
+            }
+
+            *sample = crate::simd::dot_product(&self.coeffs, &scratch);
+            self.pos = (self.pos + 1) % len;
         }
     }
 
