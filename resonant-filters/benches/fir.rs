@@ -10,17 +10,13 @@ fn bench_fir(c: &mut Criterion) {
         let coeffs = vec![1.0 / taps as f32; taps];
         let mut buf = vec![0.5_f32; buf_len];
 
-        group.bench_with_input(
-            BenchmarkId::new("process_buf", taps),
-            &taps,
-            |b, &_| {
-                let mut filter = Fir::new(coeffs.clone());
-                b.iter(|| {
-                    buf.fill(0.5);
-                    filter.process_buf(&mut buf);
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("process_buf", taps), &taps, |b, &_| {
+            let mut filter = Fir::new(coeffs.clone());
+            b.iter(|| {
+                buf.fill(0.5);
+                filter.process_buf(&mut buf);
+            });
+        });
     }
     group.finish();
 }
