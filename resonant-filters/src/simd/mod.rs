@@ -18,7 +18,6 @@ mod neon;
 /// # Panics
 ///
 /// Panics if `a` and `b` have different lengths.
-#[allow(dead_code)] // used once FIR SIMD path lands (commit 4)
 #[inline]
 pub(crate) fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "buffer length mismatch");
