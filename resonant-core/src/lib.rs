@@ -14,6 +14,8 @@ pub mod sliding_window;
 /// Window functions for spectral analysis.
 pub mod window;
 
+pub(crate) mod simd;
+
 pub use fixed::{Q15, Q31};
 pub use ring_buf::RingBuf;
 pub use signal::{Domain, FreqDomain, Signal, TimeDomain};
