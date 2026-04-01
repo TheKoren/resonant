@@ -70,6 +70,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y qemu-system-arm
       - run: cd ci/no-std-check && cargo build --target thumbv7em-none-eabihf --release
+        env:
+          # The global RUSTFLAGS="-Dwarnings" would override (not merge with)
+          # .cargo/config.toml's rustflags and drop the -Tlink.x linker script
+          # from cortex-m-rt — producing a vector-table-less binary that locks
+          # up in QEMU. Explicitly include both flags here.
+          RUSTFLAGS: "-Dwarnings -C link-arg=-Tlink.x"
       - run: |
           qemu-system-arm \
             -machine mps2-an386 \
