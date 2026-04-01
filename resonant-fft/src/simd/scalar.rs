@@ -1,5 +1,9 @@
 //! Scalar fallback implementations — always compiled, used as reference.
 
+// Brings f32::sqrt into scope on no_std via libm.
+#[allow(unused_imports)]
+use num_traits::float::Float as _;
+
 /// Compute magnitude: `sqrt(re² + im²)` for interleaved `[re, im, ...]` pairs.
 ///
 /// `flat` must have even length. Output has `flat.len() / 2` elements.
