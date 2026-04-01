@@ -23,6 +23,7 @@ pub mod design;
 /// Sample-rate conversion — integer decimation with anti-alias filtering.
 pub mod resample;
 
+#[cfg(feature = "alloc")]
 pub(crate) mod simd;
 
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};

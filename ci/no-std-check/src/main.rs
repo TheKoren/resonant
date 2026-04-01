@@ -1,29 +1,27 @@
 //! no_std smoke test for resonant-core, resonant-fft, and resonant-filters.
 //!
-//! This binary is never run in CI — it is only *compiled*. A successful
-//! build proves that the crates work on a bare-metal Cortex-M4 target
-//! (`thumbv7em-none-eabihf`).
+//! This binary is compiled and *run* in CI under QEMU. A zero exit code means
+//! all operations completed without panicking on a bare-metal Cortex-M4 target
+//! (`thumbv7em-none-eabihf`). Any panic exits QEMU with code 1.
 //!
 //! ## Running locally with QEMU
 //!
 //! ```sh
 //! cargo build --release --target thumbv7em-none-eabihf
-//! qemu-system-arm -machine mps2-an386 -nographic -semihosting \
+//! qemu-system-arm -machine mps2-an386 -nographic \
+//!   -semihosting-config enable=on,target=native \
 //!   -kernel target/thumbv7em-none-eabihf/release/resonant-no-std-check
-//! # Press Ctrl-A X to quit QEMU (panic-halt loops on completion)
+//! echo "Exit code: $?"
 //! ```
 
 #![no_std]
 #![no_main]
 
 use cortex_m_rt::entry;
-use panic_halt as _;
+use panic_semihosting as _;
 
-use resonant_core::{
-    signal::Signal,
-    window,
-    RingBuf,
-};
+use cortex_m_semihosting::debug;
+use resonant_core::{signal::Signal, window, RingBuf};
 use resonant_fft::radix2;
 use resonant_filters::biquad::{Biquad, BiquadCoeffs};
 
@@ -64,5 +62,8 @@ fn main() -> ! {
     let mut filter = Biquad::new(coeffs);
     let _ = filter.process_sample(1.0);
 
+    // Signal success to QEMU. debug::exit() should not return under QEMU;
+    // the loop below satisfies the `-> !` return type if it somehow does.
+    debug::exit(debug::EXIT_SUCCESS);
     loop {}
 }

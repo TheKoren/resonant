@@ -17,6 +17,10 @@ resonant-filters = { version = "0.0.2", path = "../resonant-filters" }
 [features]
 default = []
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"

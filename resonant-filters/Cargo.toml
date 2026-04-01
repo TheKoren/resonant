@@ -24,6 +24,10 @@ criterion = { version = "0.5", features = ["html_reports"] }
 name = "fir"
 harness = false
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"

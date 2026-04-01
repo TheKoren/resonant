@@ -11,8 +11,12 @@ resonant-core = { path = "../../resonant-core", default-features = false }
 resonant-fft = { path = "../../resonant-fft", default-features = false }
 resonant-filters = { path = "../../resonant-filters", default-features = false }
 cortex-m-rt = "0.7"
-panic-halt = "0.2"
+cortex-m-semihosting = "0.5"
+panic-semihosting = "0.6"
 
 [profile.dev]
-# Embedded targets need LTO off and opt-level low to keep binary small
 opt-level = 1
+
+[profile.release]
+opt-level = "s"
+lto = true
