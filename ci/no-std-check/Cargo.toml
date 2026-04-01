@@ -1,0 +1,18 @@
+[workspace]
+
+[package]
+name = "resonant-no-std-check"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[dependencies]
+resonant-core = { path = "../../resonant-core", default-features = false }
+resonant-fft = { path = "../../resonant-fft", default-features = false }
+resonant-filters = { path = "../../resonant-filters", default-features = false }
+cortex-m-rt = "0.7"
+panic-halt = "0.2"
+
+[profile.dev]
+# Embedded targets need LTO off and opt-level low to keep binary small
+opt-level = 1

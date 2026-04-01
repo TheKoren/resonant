@@ -1,8 +1,23 @@
 secrets/
+
+# Workspace build artifacts
 /target
+
+# Each standalone sub-workspace (e.g. ci/no-std-check) has its own target/
+ci/*/target/
+
+# Lock files — tracked at workspace level, not in standalone ci crates
 Cargo.lock
+ci/*/Cargo.lock
+
+# Criterion benchmark reports
+target/criterion/
+
+# Editor temporaries
 *.swp
 *.swo
 *~
 .DS_Store
+
+# Image outputs from examples/benchmarks
 *.png

@@ -59,6 +59,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
 
+  no-std:
+    name: no_std Embedded Build (Cortex-M4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --manifest-path ci/no-std-check/Cargo.toml --target thumbv7em-none-eabihf
+
   wasm:
     name: WASM Build
     runs-on: ubuntu-latest
