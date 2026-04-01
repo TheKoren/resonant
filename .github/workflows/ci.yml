@@ -60,7 +60,7 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
 
   no-std:
-    name: no_std Embedded Build (Cortex-M4)
+    name: no_std Embedded Build + Run (Cortex-M4)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,14 @@ jobs:
         with:
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --manifest-path ci/no-std-check/Cargo.toml --target thumbv7em-none-eabihf
+      - run: sudo apt-get update && sudo apt-get install -y qemu-system-arm
+      - run: cargo build --manifest-path ci/no-std-check/Cargo.toml --target thumbv7em-none-eabihf --release
+      - run: |
+          qemu-system-arm \
+            -machine mps2-an386 \
+            -nographic \
+            -semihosting-config enable=on,target=native \
+            -kernel ci/no-std-check/target/thumbv7em-none-eabihf/release/resonant-no-std-check
 
   wasm:
     name: WASM Build

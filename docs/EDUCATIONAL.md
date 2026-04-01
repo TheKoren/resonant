@@ -12,6 +12,8 @@
 - [Fixed-Point Arithmetic](#fixed-point-arithmetic)
 - [Filters](#filters)
 - [Spectral Analysis](#spectral-analysis)
+- [Building for Embedded and WASM](#building-for-embedded-and-wasm)
+- [SIMD Acceleration](#simd-acceleration)
 
 ---
 
@@ -407,4 +409,269 @@ let output = resample::decimate(&input, 3, 48000.0).unwrap();
 
 ## Spectral Analysis
 
-TODO: Explain spectral features (centroid, flatness, rolloff) and their musical meaning.
+Spectral features summarise the shape of a magnitude spectrum as a single number. They
+are the building blocks of music information retrieval (MIR) — used to classify timbre,
+detect changes in sound texture, and drive effects like auto-EQ.
+
+All four features in resonant operate on a **magnitude spectrum**: a slice of non-negative
+values where each element is the magnitude of a frequency bin. Compute this from a
+frequency-domain signal with `SignalFreqExt::magnitude()`.
+
+### Spectral centroid
+
+The centroid is the **weighted mean frequency** of the spectrum — its "centre of mass".
+
+```
+centroid = Σ(magnitude[k] × frequency[k]) / Σ(magnitude[k])
+```
+
+- A **bright, treble-heavy** sound (cymbal, violin harmonics) has a high centroid.
+- A **dark, bass-heavy** sound (kick drum, cello) has a low centroid.
+- In music information retrieval, centroid correlates strongly with perceived brightness.
+
+```rust
+use resonant_analysis::spectral;
+
+let magnitudes = [0.1_f32, 0.3, 0.9, 0.4, 0.1];
+let frequencies = [0.0_f32, 1000.0, 2000.0, 3000.0, 4000.0];
+
+let centroid = spectral::spectral_centroid(&magnitudes, &frequencies).unwrap();
+// centroid ≈ 2105 Hz — pulled toward the dominant 2 kHz peak
+```
+
+### Spectral spread
+
+Spread is the **standard deviation** of frequency around the centroid — it measures how
+"wide" the spectrum is.
+
+```
+spread = sqrt( Σ(magnitude[k] × (frequency[k] − centroid)²) / Σ(magnitude[k]) )
+```
+
+- A **pure sine** at a single frequency has near-zero spread.
+- **White noise** (equal energy at all frequencies) has maximum spread.
+- A **rich harmonic** sound (full orchestra) has intermediate spread.
+
+```rust
+use resonant_analysis::spectral;
+
+// Pure sine at 1 kHz
+let mags_sine = [0.0_f32, 1.0, 0.0, 0.0, 0.0];
+let freqs     = [0.0_f32, 1000.0, 2000.0, 3000.0, 4000.0];
+let spread_sine = spectral::spectral_spread(&mags_sine, &freqs).unwrap();
+
+// Flat noise
+let mags_noise = [1.0_f32; 5];
+let spread_noise = spectral::spectral_spread(&mags_noise, &freqs).unwrap();
+
+assert!(spread_noise > spread_sine); // noise is much wider than a pure tone
+```
+
+### Spectral flatness
+
+Flatness is the ratio of the **geometric mean** to the **arithmetic mean** of the
+magnitudes. It ranges from 0.0 (perfectly tonal — one sharp peak) to 1.0 (perfectly
+flat — noise-like energy across all bins).
+
+```
+flatness = geometric_mean(magnitudes) / arithmetic_mean(magnitudes)
+         = exp(mean(ln(magnitudes))) / mean(magnitudes)
+```
+
+The log-domain computation avoids numerical underflow for long spectra.
+
+- **Tonal sounds** (sine wave, tuned instrument): flatness close to 0.
+- **Noise and unpitched percussion**: flatness close to 1.
+- **Flatness is used in codec design** (e.g. MP3 bit allocation) and tonality detection.
+
+```rust
+use resonant_analysis::spectral;
+
+let tonal = [0.0_f32, 0.0, 10.0, 0.0, 0.0]; // single peak
+let noisy = [1.0_f32, 1.1, 0.9, 1.0, 1.0];  // roughly flat
+
+let f_tonal = spectral::spectral_flatness(&tonal).unwrap();
+let f_noisy = spectral::spectral_flatness(&noisy).unwrap();
+
+assert!(f_tonal < 0.1);  // strongly tonal
+assert!(f_noisy > 0.9);  // nearly flat
+```
+
+### Spectral rolloff
+
+Rolloff is the frequency below which a given **percentage of the total spectral energy**
+is contained. The most common threshold is 85%.
+
+```
+rolloff_85 = min frequency f such that: Σ_{k: freq[k] ≤ f} magnitude[k] ≥ 0.85 × Σ magnitude[k]
+```
+
+- A **bass-heavy** mix has a low rolloff — most energy is in the low frequencies.
+- A **high-pitched** or bright sound has a high rolloff.
+- Rolloff is used to distinguish **speech from music** and to estimate the high-frequency
+  boundary of content (useful for adaptive bit allocation).
+
+```rust
+use resonant_analysis::spectral;
+
+let magnitudes = [3.0_f32, 2.0, 1.0, 0.5, 0.2]; // most energy is low
+let frequencies = [200.0_f32, 500.0, 1000.0, 2000.0, 4000.0];
+
+let rolloff = spectral::spectral_rolloff(&magnitudes, &frequencies, 0.85).unwrap();
+// rolloff ≈ 500 Hz — 85% of energy is below 500 Hz
+```
+
+### Putting it together — a real FFT pipeline
+
+```rust,ignore
+use resonant_core::window;
+use resonant_fft::{SignalFftExt, SignalFreqExt};
+use resonant_analysis::spectral;
+use resonant_core::Signal;
+
+// 1. Build a windowed signal
+let mut samples = audio_frame.to_vec(); // 1024 f32 samples at 44100 Hz
+window::hann(&mut samples);
+let signal = Signal::from_samples(samples);
+
+// 2. FFT → magnitude spectrum
+let freq_signal = signal.fft().unwrap();
+let magnitudes = freq_signal.magnitude();
+
+// 3. Build a frequency axis (bin k → Hz)
+let n = 1024_f32;
+let sr = 44100.0_f32;
+let frequencies: Vec<f32> = (0..magnitudes.len()).map(|k| k as f32 * sr / n).collect();
+
+// 4. Compute spectral features
+let centroid = spectral::spectral_centroid(&magnitudes, &frequencies).unwrap();
+let spread   = spectral::spectral_spread(&magnitudes, &frequencies).unwrap();
+let flatness = spectral::spectral_flatness(&magnitudes).unwrap();
+let rolloff  = spectral::spectral_rolloff(&magnitudes, &frequencies, 0.85).unwrap();
+```
+
+---
+
+## Building for Embedded and WASM
+
+### Feature flags
+
+| Crate | Feature | Effect |
+|---|---|---|
+| `resonant-core` | *(none required)* | `no_std`, `no_alloc` by default |
+| `resonant-core` | `alloc` | Enables `SlidingWindow` and other heap-backed APIs |
+| `resonant-fft` | *(none)* | `no_std`, `no_alloc` — radix-2 FFT and DCT only |
+| `resonant-fft` | `alloc` | Enables extension traits (`SignalFftExt`, `SignalFreqExt`) |
+| `resonant-fft` | `rustfft` (default) | Arbitrary-length FFT; implies `alloc` |
+| `resonant-filters` | *(none)* | `no_std`, `no_alloc` — biquad and FIR filters |
+| `resonant-filters` | `alloc` (default) | Enables `IirChain` and design helpers |
+
+### Embedded (Cortex-M4 / `thumbv7em-none-eabihf`)
+
+```toml
+# Cargo.toml — your embedded crate
+[dependencies]
+resonant-core    = { version = "0.0.2", default-features = false }
+resonant-fft     = { version = "0.0.3", default-features = false }
+resonant-filters = { version = "0.0.2", default-features = false }
+```
+
+No global allocator is required. The radix-2 FFT, all window functions, biquad, and FIR
+filters work on stack-allocated buffers.
+
+```sh
+# Build for Cortex-M4 with hardware FPU
+cargo build --release --target thumbv7em-none-eabihf
+```
+
+You can verify the build runs correctly in QEMU:
+
+```sh
+qemu-system-arm -machine mps2-an386 -nographic \
+  -semihosting-config enable=on,target=native \
+  -kernel target/thumbv7em-none-eabihf/release/your-app
+echo "Exit: $?"
+```
+
+The `ci/no-std-check/` crate in the resonant repository is a complete smoke-test that
+exercises all three crates on this exact target.
+
+### WASM (`wasm32-unknown-unknown`)
+
+```sh
+rustup target add wasm32-unknown-unknown
+
+# Core is always compatible
+cargo build -p resonant-core --target wasm32-unknown-unknown
+
+# FFT without the std rustfft backend
+cargo build -p resonant-fft --target wasm32-unknown-unknown --no-default-features
+
+# Filters compile cleanly
+cargo build -p resonant-filters --target wasm32-unknown-unknown
+```
+
+The SIMD dispatch modules use `#[cfg(target_arch = "x86_64")]` and
+`#[cfg(target_arch = "aarch64")]`, so the scalar fallback is automatically selected for
+`wasm32` — no conditional compilation is needed in your own code.
+
+---
+
+## SIMD Acceleration
+
+resonant uses `core::arch` intrinsics for hot-path acceleration, with a scalar fallback
+that is always compiled and used on targets without SIMD support (including `wasm32`
+and embedded Cortex-M).
+
+### Dispatch pattern
+
+Each accelerated function follows the same pattern:
+
+```rust,ignore
+pub(crate) fn multiply_buffers(a: &mut [f32], b: &[f32]) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        dispatch_multiply_buffers_x86(a, b);
+        return;
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        dispatch_multiply_buffers_neon(a, b);
+        return;
+    }
+    scalar::multiply_buffers(a, b);
+}
+```
+
+The `dispatch_*` functions are separate so that clippy's `needless_return` lint is
+not triggered. The scalar implementation is always compiled — it serves as the reference
+for correctness tests and is the only path on unsupported targets.
+
+### Accelerated paths
+
+| Path | Intrinsic set | Description |
+|---|---|---|
+| `window::apply(samples, window)` | SSE2 / NEON | Element-wise multiply of two f32 slices |
+| `Fir::process_buf(block)` | SSE2 / NEON | FIR dot product over linearised delay line |
+| `SignalFreqExt::magnitude()` | SSE2 / NEON | `sqrt(re² + im²)` over complex bins |
+| `SignalFreqExt::magnitude_squared()` | SSE2 / NEON | `re² + im²`, no sqrt |
+| Stereo→mono downmix in `resonant` facade | SSE2 / NEON | Deinterleave, add, scale |
+
+### Safety
+
+All intrinsic functions are `unsafe`. Each unsafe block carries a `// SAFETY:` comment
+explaining the invariant. Runtime CPU feature detection is not used — each accelerated
+function requires its target feature to be enabled at compile time via
+`#[target_feature(enable = "sse2")]`. This is safe when the binary is compiled for a
+specific target (e.g. `-C target-feature=+sse2`) or when the caller has verified support
+via `is_x86_feature_detected!`.
+
+### Benchmarking
+
+Criterion benchmarks live in each crate's `benches/` directory:
+
+```sh
+cargo bench --bench window     # resonant-core: window application
+cargo bench --bench fir        # resonant-filters: FIR filter
+cargo bench --bench magnitude  # resonant-fft: magnitude computation
+```

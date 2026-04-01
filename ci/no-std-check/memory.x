@@ -2,12 +2,12 @@
  *
  * QEMU invocation for local verification:
  *   cargo build --release --target thumbv7em-none-eabihf
- *   qemu-system-arm -machine mps2-an386 -nographic -semihosting \
+ *   qemu-system-arm -machine mps2-an386 -nographic \
+ *     -semihosting-config enable=on,target=native \
  *     -kernel target/thumbv7em-none-eabihf/release/resonant-no-std-check
+ *   echo "Exit code: $?"
  *
- * Note: with panic-halt the program loops on panic; press Ctrl-A X to quit QEMU.
- * Swap panic-halt for panic-semihosting (with a semihosting exit call in main)
- * if you need a clean CI-friendly exit.
+ * The binary exits cleanly via semihosting (code 0 = success, 1 = panic).
  */
 MEMORY
 {
