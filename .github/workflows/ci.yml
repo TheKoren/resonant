@@ -59,6 +59,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
 
+  wasm:
+    name: WASM Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p resonant-core --target wasm32-unknown-unknown
+      - run: cargo build -p resonant-fft --target wasm32-unknown-unknown --no-default-features
+      - run: cargo build -p resonant-filters --target wasm32-unknown-unknown
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
