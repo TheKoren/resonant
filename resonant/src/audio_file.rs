@@ -463,7 +463,7 @@ pub struct FftFrameIter<'a> {
     offset: usize,
 }
 
-impl<'a> Iterator for FftFrameIter<'a> {
+impl Iterator for FftFrameIter<'_> {
     type Item = Result<Vec<FrequencyBin>, AudioError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -520,7 +520,7 @@ impl<'a> Iterator for FftFrameIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for FftFrameIter<'a> {}
+impl ExactSizeIterator for FftFrameIter<'_> {}
 
 /// Average all channels down to mono.
 ///
