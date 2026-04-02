@@ -108,6 +108,59 @@ impl<T: Copy + Default, const N: usize> RingBuf<T, N> {
         N
     }
 
+    /// Returns the contents as two contiguous slices, oldest element first.
+    ///
+    /// The concatenation of the two slices is always the full sequence from
+    /// oldest to newest. The second slice is empty when the buffer has not
+    /// wrapped around.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resonant_core::RingBuf;
+    ///
+    /// let mut buf = RingBuf::<i32, 4>::new();
+    /// buf.push(1); buf.push(2); buf.push(3); buf.push(4);
+    /// buf.pop(); // discard 1, head advances
+    /// buf.push(5); // wraps around
+    ///
+    /// let (a, b) = buf.as_slices();
+    /// let combined: Vec<i32> = a.iter().chain(b).copied().collect();
+    /// assert_eq!(combined, vec![2, 3, 4, 5]);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn as_slices(&self) -> (&[T], &[T]) {
+        let tail = self.head + self.len;
+        if tail <= N {
+            // contiguous — no wrap
+            (&self.buf[self.head..tail], &[])
+        } else {
+            // wrapped: first part runs to end of array, second from start
+            (&self.buf[self.head..N], &self.buf[..tail - N])
+        }
+    }
+
+    /// Removes and returns all elements from oldest to newest.
+    ///
+    /// The buffer is empty after this call.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resonant_core::RingBuf;
+    ///
+    /// let mut buf = RingBuf::<i32, 4>::new();
+    /// buf.push(10); buf.push(20); buf.push(30);
+    /// let drained: Vec<i32> = buf.drain().collect();
+    /// assert_eq!(drained, vec![10, 20, 30]);
+    /// assert!(buf.is_empty());
+    /// ```
+    #[inline]
+    pub fn drain(&mut self) -> RingBufDrain<'_, T, N> {
+        RingBufDrain { buf: self }
+    }
+
     /// Removes all elements, resetting the buffer to its initial state.
     #[inline]
     pub fn clear(&mut self) {
@@ -174,9 +227,34 @@ impl<'a, T: Copy + Default, const N: usize> Iterator for RingBufIter<'a, T, N> {
 
 impl<T: Copy + Default, const N: usize> ExactSizeIterator for RingBufIter<'_, T, N> {}
 
+/// Draining iterator produced by [`RingBuf::drain`].
+///
+/// Yields elements from oldest to newest, removing each from the buffer.
+#[derive(Debug)]
+pub struct RingBufDrain<'a, T: Copy + Default, const N: usize> {
+    buf: &'a mut RingBuf<T, N>,
+}
+
+impl<T: Copy + Default, const N: usize> Iterator for RingBufDrain<'_, T, N> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.buf.pop()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.buf.len, Some(self.buf.len))
+    }
+}
+
+impl<T: Copy + Default, const N: usize> ExactSizeIterator for RingBufDrain<'_, T, N> {}
+
 #[cfg(test)]
 mod tests {
     extern crate std;
+    use std::vec;
     use std::vec::Vec;
 
     use super::*;
@@ -353,6 +431,101 @@ mod tests {
         assert!(buf.is_full());
         buf.push(2); // overwrites
         assert_eq!(buf.pop(), Some(2));
+        assert!(buf.is_empty());
+    }
+
+    // ── as_slices ──
+
+    #[test]
+    fn as_slices_no_wraparound() {
+        let mut buf = RingBuf::<i32, 4>::new();
+        buf.push(1);
+        buf.push(2);
+        buf.push(3);
+        let (a, b) = buf.as_slices();
+        assert_eq!(a, &[1, 2, 3]);
+        assert!(b.is_empty());
+    }
+
+    #[test]
+    fn as_slices_wraparound() {
+        let mut buf = RingBuf::<i32, 4>::new();
+        buf.push(1);
+        buf.push(2);
+        buf.push(3);
+        buf.push(4);
+        let _ = buf.pop(); // head → 1, buf = [2,3,4]
+        buf.push(5); // wraps: buf internal = [5,2,3,4] with head=1, len=4
+        let (a, b) = buf.as_slices();
+        let combined: Vec<i32> = a.iter().chain(b).copied().collect();
+        assert_eq!(combined, vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn as_slices_empty() {
+        let buf = RingBuf::<i32, 4>::new();
+        let (a, b) = buf.as_slices();
+        assert!(a.is_empty());
+        assert!(b.is_empty());
+    }
+
+    #[test]
+    fn as_slices_full_no_wrap() {
+        let mut buf = RingBuf::<i32, 3>::new();
+        buf.push(7);
+        buf.push(8);
+        buf.push(9);
+        let (a, b) = buf.as_slices();
+        assert_eq!(a, &[7, 8, 9]);
+        assert!(b.is_empty());
+    }
+
+    // ── drain ──
+
+    #[test]
+    fn drain_yields_oldest_first() {
+        let mut buf = RingBuf::<i32, 4>::new();
+        buf.push(10);
+        buf.push(20);
+        buf.push(30);
+        let drained: Vec<i32> = buf.drain().collect();
+        assert_eq!(drained, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn drain_empties_buffer() {
+        let mut buf = RingBuf::<i32, 4>::new();
+        buf.push(1);
+        buf.push(2);
+        let _ = buf.drain().count();
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn drain_empty_buffer() {
+        let mut buf = RingBuf::<f32, 4>::new();
+        assert_eq!(buf.drain().count(), 0);
+    }
+
+    #[test]
+    fn drain_exact_size() {
+        let mut buf = RingBuf::<i32, 4>::new();
+        buf.push(1);
+        buf.push(2);
+        buf.push(3);
+        let drain = buf.drain();
+        assert_eq!(drain.len(), 3);
+    }
+
+    #[test]
+    fn drain_after_wraparound() {
+        let mut buf = RingBuf::<i32, 3>::new();
+        for i in 0..5 {
+            buf.push(i);
+        }
+        // contains [2, 3, 4]
+        let drained: Vec<i32> = buf.drain().collect();
+        assert_eq!(drained, vec![2, 3, 4]);
         assert!(buf.is_empty());
     }
 }
