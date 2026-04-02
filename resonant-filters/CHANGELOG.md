@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-02
+
+### Added
+- SIMD dot product for `Fir::process_buf` — SSE2 / NEON / scalar dispatch via linearised delay line
+- Criterion benchmark harness for FIR processing (`benches/fir.rs`)
+- `[package.metadata.docs.rs]` for full-feature docs.rs rendering
+
+### Changed
+- `BiquadState::s1` and `BiquadState::s2` fields marked `#[doc(hidden)]`
+- `simd` module gated on `#[cfg(feature = "alloc")]` (only used by `Fir`, which requires alloc)
+
 ## [0.0.2] - 2026-03-23
 
 ### Added

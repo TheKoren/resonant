@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.0] - 2026-04-02
+
+### Added
+- `[package.metadata.docs.rs]` for full-feature docs.rs rendering
+
 ## [0.0.2] - 2026-03-30
 
 ### Added
@@ -18,3 +23,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `ChromaExtractor` — 12-bin pitch class profiles with configurable tuning
 
 ## [Unreleased]
+
+

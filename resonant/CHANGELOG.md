@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-02
+
+### Added
+- SIMD stereo-to-mono downmix (SSE2 / NEON / scalar) in `AudioFile` decoding path
+- `[package.metadata.docs.rs]` for full-feature docs.rs rendering
+
+### Changed
+- All inter-crate dependencies bumped to 0.1.0
+
 ## [0.0.2] - 2026-03-23
 
 ### Added
