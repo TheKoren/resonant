@@ -43,7 +43,10 @@ impl<T: Copy + Default> HeapRingBuf<T> {
     /// Panics if `capacity` is zero.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
-        assert!(capacity > 0, "HeapRingBuf capacity must be greater than zero");
+        assert!(
+            capacity > 0,
+            "HeapRingBuf capacity must be greater than zero"
+        );
         Self {
             buf: vec![T::default(); capacity],
             head: 0,
@@ -102,7 +105,10 @@ impl<T: Copy> HeapRingBuf<T> {
         if tail <= self.capacity {
             (&self.buf[self.head..tail], &[])
         } else {
-            (&self.buf[self.head..self.capacity], &self.buf[..tail - self.capacity])
+            (
+                &self.buf[self.head..self.capacity],
+                &self.buf[..tail - self.capacity],
+            )
         }
     }
 
