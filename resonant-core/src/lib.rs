@@ -11,6 +11,8 @@ pub mod ring_buf;
 pub mod ring_buf_heap;
 /// Compile-time domain tracking for signals.
 pub mod signal;
+/// Arithmetic operators for [`Signal`] — element-wise, domain-preserving.
+pub mod signal_ops;
 /// Heap-allocated sliding window for overlapping frame extraction.
 #[cfg(feature = "alloc")]
 pub mod sliding_window;
