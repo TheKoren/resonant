@@ -175,9 +175,8 @@ pub fn irfft(input: &[Complex<f32>], out: &mut [f32]) -> Result<(), FftError> {
     // n = 2*m f32 elements, which maps to exactly m Complex<f32> elements.
     // We hold only `scratch` for the duration of the function and do not
     // alias `out` simultaneously.
-    let scratch: &mut [Complex<f32>] = unsafe {
-        core::slice::from_raw_parts_mut(out.as_mut_ptr().cast::<Complex<f32>>(), m)
-    };
+    let scratch: &mut [Complex<f32>] =
+        unsafe { core::slice::from_raw_parts_mut(out.as_mut_ptr().cast::<Complex<f32>>(), m) };
 
     // Inverse post-processing: recover Z[k] from X[k] = input[k].
     //
@@ -239,7 +238,10 @@ mod tests {
     fn rfft_wrong_output_length_returns_error() {
         let input = [0.0_f32; 8];
         let mut out = [c(0.0, 0.0); 3]; // should be 5
-        assert!(matches!(rfft(&input, &mut out), Err(FftError::LengthMismatch { .. })));
+        assert!(matches!(
+            rfft(&input, &mut out),
+            Err(FftError::LengthMismatch { .. })
+        ));
     }
 
     #[test]
@@ -331,13 +333,17 @@ mod tests {
         rfft(&input, &mut rfft_out).unwrap();
 
         // full complex FFT
-        let mut cfft_buf: [Complex<f32>; 8] =
-            core::array::from_fn(|i| Complex::new(input[i], 0.0));
+        let mut cfft_buf: [Complex<f32>; 8] = core::array::from_fn(|i| Complex::new(input[i], 0.0));
         crate::radix2::fft(&mut cfft_buf).unwrap();
 
         for k in 0..=m {
             let diff = (rfft_out[k] - cfft_buf[k]).norm();
-            assert!(diff < 1e-4, "bin {k}: rfft={:?} cfft={:?}", rfft_out[k], cfft_buf[k]);
+            assert!(
+                diff < 1e-4,
+                "bin {k}: rfft={:?} cfft={:?}",
+                rfft_out[k],
+                cfft_buf[k]
+            );
         }
     }
 
@@ -360,9 +366,8 @@ mod tests {
         // A pure cosine at bin k=1 should have energy only at bins 1 (and N-1 which
         // maps to M-1 in the half-spectrum). Bin 0, Nyquist, and others ≈ 0.
         let n = 8usize;
-        let input: [f32; 8] = core::array::from_fn(|i| {
-            (2.0 * PI * 1.0 * i as f32 / n as f32).cos()
-        });
+        let input: [f32; 8] =
+            core::array::from_fn(|i| (2.0 * PI * 1.0 * i as f32 / n as f32).cos());
         let mut out = [c(0.0, 0.0); 5];
         rfft(&input, &mut out).unwrap();
 
@@ -370,7 +375,11 @@ mod tests {
         assert!(out[0].norm() < 1e-3, "DC should be ~0: {:?}", out[0]);
         assert!(out[4].norm() < 1e-3, "Nyquist should be ~0: {:?}", out[4]);
         // bin 1 should have the energy (magnitude ≈ N/2 = 4 for cosine)
-        assert!(out[1].norm() > 3.0, "bin 1 should have energy: {:?}", out[1]);
+        assert!(
+            out[1].norm() > 3.0,
+            "bin 1 should have energy: {:?}",
+            out[1]
+        );
         // bins 2 and 3 should be ~0
         assert!(out[2].norm() < 1e-3, "bin 2 should be ~0: {:?}", out[2]);
         assert!(out[3].norm() < 1e-3, "bin 3 should be ~0: {:?}", out[3]);
@@ -383,7 +392,11 @@ mod tests {
         let mut out = [c(0.0, 0.0); 5];
         rfft(&input, &mut out).unwrap();
 
-        assert!(out[4].im.abs() < 1e-5, "Nyquist bin must be real: {:?}", out[4]);
+        assert!(
+            out[4].im.abs() < 1e-5,
+            "Nyquist bin must be real: {:?}",
+            out[4]
+        );
         assert!(out[0].im.abs() < 1e-5, "DC bin must be real: {:?}", out[0]);
     }
 
@@ -403,7 +416,12 @@ mod tests {
         // Check X[k] = full_fft[k] for k = 0..=N/2
         for k in 0..=m {
             let diff = (rfft_out[k] - cfft[k]).norm();
-            assert!(diff < 1e-4, "bin {k} mismatch: rfft={:?} full={:?}", rfft_out[k], cfft[k]);
+            assert!(
+                diff < 1e-4,
+                "bin {k} mismatch: rfft={:?} full={:?}",
+                rfft_out[k],
+                cfft[k]
+            );
         }
 
         // Check conjugate symmetry: full_fft[N-k] = conj(full_fft[k])
