@@ -55,14 +55,19 @@ window::hann(&mut samples);
 // `samples` is now tapered to zero at both ends — ready for FFT
 ```
 
-Each window function multiplies a buffer in-place with no allocation. All functions are
-generic over the [`Sample`](https://docs.rs/resonant-core) trait, so they work equally
-on `f32`, `f64`, `Q15`, and `Q31` buffers. Existing `f32` callers require no changes.
+Each window function multiplies a buffer in-place with no allocation. The named window
+functions (`hann`, `hamming`, `blackman`, `bartlett`, `rectangular`) are generic over
+the [`Sample`](https://docs.rs/resonant-core) trait and work equally on `f32`, `f64`,
+`Q15`, and `Q31` buffers without a manual conversion step. Existing `f32` callers
+require no changes.
+
+`window::apply` is a separate SIMD-accelerated function for the common case of
+repeatedly applying a precomputed `f32` window — it skips the cosine computation.
 
 ```rust
 use resonant_core::{window, fixed::Q15};
 
-// f32 — most common case
+// f32 — most common
 let mut f32_buf = [1.0_f32; 1024];
 window::hann(&mut f32_buf);
 
@@ -70,12 +75,12 @@ window::hann(&mut f32_buf);
 let mut q15_buf = [Q15::from_f32(1.0); 1024];
 window::hann(&mut q15_buf);
 
-// Apply a precomputed window (avoids recomputing cosines each frame)
+// Precomputed window for repeated application (SIMD-accelerated, f32 only)
 let mut win = [1.0_f32; 1024];
 window::hann(&mut win); // compute once
 
 let mut frame = [0.5_f32; 1024];
-window::apply(&mut frame, &win); // reuse
+window::apply(&mut frame, &win); // fast path — no cosines, uses SSE2/NEON
 
 // Window a subset of a buffer
 let mut buf = [1.0_f32; 2048];
