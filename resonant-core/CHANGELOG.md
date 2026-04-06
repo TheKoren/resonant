@@ -18,9 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   weighted blending; mixing `TimeDomain + FreqDomain` is a compile error
 - `Sample` trait: unified conversion interface (`to_f32`, `from_f32`, `to_f64`,
   `from_f64`, `zero`, `one`) with impls for `f32`, `f64`, `i16`, `i32`, `Q15`, `Q31`
-- Window functions (`hann`, `hamming`, `blackman`, `rectangular`, `bartlett`, `apply`)
-  are now generic over `S: Sample` — work on `f32`, `f64`, `Q15`, `Q31`, and integer
-  buffers without a manual conversion step; existing `f32` callers compile unchanged
+- Window functions (`hann`, `hamming`, `blackman`, `rectangular`, `bartlett`) are now
+  generic over `S: Sample` — work on `f32`, `f64`, `Q15`, `Q31`, and integer buffers
+  without a manual conversion step; existing `f32` callers compile unchanged
+- `window::apply` retains its `f32`-only SIMD-accelerated signature for the hot path
+  of repeated precomputed-window application
 
 ## [0.1.0] - 2026-04-02
 

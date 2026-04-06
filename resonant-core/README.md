@@ -132,12 +132,19 @@ and integer buffers without a manual conversion step.
 ```rust
 use resonant_core::{window, fixed::Q15};
 
+// f32 — most common case
 let mut f32_buf = [1.0_f32; 1024];
 window::hann(&mut f32_buf);
 
-// Same API for fixed-point buffers
+// Same API for fixed-point buffers — no conversion needed
 let mut q15_buf = [Q15::from_f32(1.0); 1024];
 window::hann(&mut q15_buf);
+
+// Precomputed window (SIMD-accelerated, f32 only)
+let mut win = [1.0_f32; 1024];
+window::hann(&mut win);
+let mut frame = [0.5_f32; 1024];
+window::apply(&mut frame, &win); // fast path for repeated application
 ```
 
 ### Fixed-point types (`Q15`, `Q31`)

@@ -151,14 +151,15 @@ pub fn bartlett<S: Sample>(samples: &mut [S]) {
     }
 }
 
-/// Applies a precomputed window to a sample buffer via element-wise multiply.
+/// Applies a precomputed `f32` window to an `f32` sample buffer via element-wise multiply.
 ///
 /// Useful when the same window shape is reused across many frames — compute
 /// the window once (e.g. with `hann` on a unit buffer), then call `apply`
 /// each time instead of recomputing cosines.
 ///
-/// Works with any [`Sample`](crate::sample::Sample) type. Multiplication is
-/// performed in `f64` and the result is converted back to `S`.
+/// Uses SIMD acceleration where available (SSE2 on x86_64, NEON on aarch64).
+/// For non-`f32` sample types, use the typed window functions (`hann`, `hamming`,
+/// etc.) directly with a unit-amplitude buffer as the precomputed template.
 ///
 /// # Panics
 ///
@@ -170,21 +171,12 @@ pub fn bartlett<S: Sample>(samples: &mut [S]) {
 /// use resonant_core::window;
 ///
 /// let mut buf = [1.0_f32; 4];
-/// let win = [0.0_f32, 0.5, 1.0, 0.5];
+/// let win = [0.0, 0.5, 1.0, 0.5];
 /// window::apply(&mut buf, &win);
 /// assert_eq!(buf, [0.0, 0.5, 1.0, 0.5]);
 /// ```
-pub fn apply<S: Sample>(samples: &mut [S], window: &[S]) {
-    assert_eq!(
-        samples.len(),
-        window.len(),
-        "window::apply: samples and window lengths differ ({} vs {})",
-        samples.len(),
-        window.len()
-    );
-    for (s, w) in samples.iter_mut().zip(window.iter()) {
-        *s = S::from_f64(s.to_f64() * w.to_f64());
-    }
+pub fn apply(samples: &mut [f32], window: &[f32]) {
+    crate::simd::multiply_buffers(samples, window);
 }
 
 #[cfg(test)]
@@ -354,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_generic_f32() {
+    fn apply_f32() {
         let mut buf = [1.0_f32; 4];
         let win = [0.0_f32, 0.5, 1.0, 0.5];
         apply(&mut buf, &win);
@@ -362,32 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_generic_f64() {
-        let mut buf = [1.0_f64; 4];
-        let win = [0.0_f64, 0.5, 1.0, 0.5];
-        apply(&mut buf, &win);
-        assert!((buf[0] - 0.0).abs() < 1e-12);
-        assert!((buf[1] - 0.5).abs() < 1e-12);
-        assert!((buf[2] - 1.0).abs() < 1e-12);
-        assert!((buf[3] - 0.5).abs() < 1e-12);
-    }
-
-    #[test]
-    fn apply_generic_q15() {
-        let mut buf = [Q15::from_f32(1.0); 4];
-        let win = [
-            Q15::from_f32(0.0),
-            Q15::from_f32(0.5),
-            Q15::MAX,
-            Q15::from_f32(0.5),
-        ];
-        apply(&mut buf, &win);
-        assert!(buf[0].to_f32().abs() < 0.001);
-        assert!((buf[1].to_f32() - 0.5).abs() < 0.002);
-    }
-
-    #[test]
-    #[should_panic(expected = "lengths differ")]
+    #[should_panic(expected = "buffer length mismatch")]
     fn apply_length_mismatch_panics() {
         let mut buf = [1.0_f32; 4];
         let win = [1.0_f32; 3];
