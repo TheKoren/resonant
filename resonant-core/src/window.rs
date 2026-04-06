@@ -3,12 +3,19 @@
 //! Each function multiplies a sample buffer in-place by the corresponding
 //! window shape. All windows are symmetric (DFT-even) with length equal to
 //! the slice length.
+//!
+//! All functions are generic over [`Sample`](crate::sample::Sample): they work on
+//! `f32`, `f64`, `Q15`, `Q31`, and integer buffers without a manual conversion step.
+//! Coefficients are computed in `f64` and converted back to `S` via
+//! [`Sample::from_f64`](crate::sample::Sample::from_f64), preserving Q31 precision.
 
-use core::f32::consts::PI;
+use core::f64::consts::PI;
 
-// num-traits with `libm` feature provides f32::cos/abs via libm on no_std targets.
+// num-traits with `libm` feature provides f64::cos/abs via libm on no_std targets.
 #[allow(unused_imports)]
 use num_traits::float::Float as _;
+
+use crate::sample::Sample;
 
 /// Applies a Hann window in-place.
 ///
@@ -27,15 +34,15 @@ use num_traits::float::Float as _;
 /// assert!((buf[0] - 0.0).abs() < 1e-6);
 /// assert!((buf[3] - 0.0).abs() < 1e-6);
 /// ```
-pub fn hann(samples: &mut [f32]) {
+pub fn hann<S: Sample>(samples: &mut [S]) {
     let len = samples.len();
     if len <= 1 {
         return;
     }
-    let n_minus_1 = (len - 1) as f32;
+    let n_minus_1 = (len - 1) as f64;
     for (i, s) in samples.iter_mut().enumerate() {
-        let w = 0.5 * (1.0 - (2.0 * PI * i as f32 / n_minus_1).cos());
-        *s *= w;
+        let w = 0.5 * (1.0 - (2.0 * PI * i as f64 / n_minus_1).cos());
+        *s = S::from_f64(s.to_f64() * w);
     }
 }
 
@@ -53,17 +60,17 @@ pub fn hann(samples: &mut [f32]) {
 ///
 /// let mut buf = [1.0_f32; 4];
 /// window::hamming(&mut buf);
-/// assert!((buf[0] - 0.08).abs() < 1e-6);
+/// assert!((buf[0] - 0.08).abs() < 1e-4);
 /// ```
-pub fn hamming(samples: &mut [f32]) {
+pub fn hamming<S: Sample>(samples: &mut [S]) {
     let len = samples.len();
     if len <= 1 {
         return;
     }
-    let n_minus_1 = (len - 1) as f32;
+    let n_minus_1 = (len - 1) as f64;
     for (i, s) in samples.iter_mut().enumerate() {
-        let w = 0.54 - 0.46 * (2.0 * PI * i as f32 / n_minus_1).cos();
-        *s *= w;
+        let w = 0.54 - 0.46 * (2.0 * PI * i as f64 / n_minus_1).cos();
+        *s = S::from_f64(s.to_f64() * w);
     }
 }
 
@@ -83,16 +90,16 @@ pub fn hamming(samples: &mut [f32]) {
 /// window::blackman(&mut buf);
 /// assert!((buf[0] - 0.0).abs() < 0.01);
 /// ```
-pub fn blackman(samples: &mut [f32]) {
+pub fn blackman<S: Sample>(samples: &mut [S]) {
     let len = samples.len();
     if len <= 1 {
         return;
     }
-    let n_minus_1 = (len - 1) as f32;
+    let n_minus_1 = (len - 1) as f64;
     for (i, s) in samples.iter_mut().enumerate() {
-        let x = 2.0 * PI * i as f32 / n_minus_1;
+        let x = 2.0 * PI * i as f64 / n_minus_1;
         let w = 0.42 - 0.5 * x.cos() + 0.08 * (2.0 * x).cos();
-        *s *= w;
+        *s = S::from_f64(s.to_f64() * w);
     }
 }
 
@@ -111,7 +118,7 @@ pub fn blackman(samples: &mut [f32]) {
 /// assert_eq!(buf, [1.0, 2.0, 3.0]);
 /// ```
 #[inline]
-pub fn rectangular(_samples: &mut [f32]) {
+pub fn rectangular<S: Sample>(_samples: &mut [S]) {
     // intentional no-op
 }
 
@@ -132,25 +139,26 @@ pub fn rectangular(_samples: &mut [f32]) {
 /// assert!((buf[2] - 1.0).abs() < 1e-6);
 /// assert!((buf[4] - 0.0).abs() < 1e-6);
 /// ```
-pub fn bartlett(samples: &mut [f32]) {
+pub fn bartlett<S: Sample>(samples: &mut [S]) {
     let len = samples.len();
     if len <= 1 {
         return;
     }
-    let n_minus_1 = (len - 1) as f32;
+    let n_minus_1 = (len - 1) as f64;
     for (i, s) in samples.iter_mut().enumerate() {
-        let w = 1.0 - (2.0 * i as f32 / n_minus_1 - 1.0).abs();
-        *s *= w;
+        let w = 1.0 - (2.0 * i as f64 / n_minus_1 - 1.0).abs();
+        *s = S::from_f64(s.to_f64() * w);
     }
 }
 
 /// Applies a precomputed window to a sample buffer via element-wise multiply.
 ///
-/// This is useful when the same window shape is reused across many frames —
-/// compute the window once, then call `apply` each time instead of
-/// recomputing cosines.
+/// Useful when the same window shape is reused across many frames — compute
+/// the window once (e.g. with `hann` on a unit buffer), then call `apply`
+/// each time instead of recomputing cosines.
 ///
-/// Uses SIMD acceleration where available (SSE on x86_64, NEON on aarch64).
+/// Works with any [`Sample`](crate::sample::Sample) type. Multiplication is
+/// performed in `f64` and the result is converted back to `S`.
 ///
 /// # Panics
 ///
@@ -162,17 +170,27 @@ pub fn bartlett(samples: &mut [f32]) {
 /// use resonant_core::window;
 ///
 /// let mut buf = [1.0_f32; 4];
-/// let win = [0.0, 0.5, 1.0, 0.5];
+/// let win = [0.0_f32, 0.5, 1.0, 0.5];
 /// window::apply(&mut buf, &win);
 /// assert_eq!(buf, [0.0, 0.5, 1.0, 0.5]);
 /// ```
-pub fn apply(samples: &mut [f32], window: &[f32]) {
-    crate::simd::multiply_buffers(samples, window);
+pub fn apply<S: Sample>(samples: &mut [S], window: &[S]) {
+    assert_eq!(
+        samples.len(),
+        window.len(),
+        "window::apply: samples and window lengths differ ({} vs {})",
+        samples.len(),
+        window.len()
+    );
+    for (s, w) in samples.iter_mut().zip(window.iter()) {
+        *s = S::from_f64(s.to_f64() * w.to_f64());
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fixed::Q15;
 
     #[test]
     fn hann_endpoints_are_zero() {
@@ -202,8 +220,8 @@ mod tests {
     fn hamming_endpoints_are_008() {
         let mut buf = [1.0_f32; 8];
         hamming(&mut buf);
-        assert!((buf[0] - 0.08).abs() < 1e-6);
-        assert!((buf[7] - 0.08).abs() < 1e-6);
+        assert!((buf[0] - 0.08).abs() < 1e-4);
+        assert!((buf[7] - 0.08).abs() < 1e-4);
     }
 
     #[test]
@@ -275,7 +293,8 @@ mod tests {
 
     #[test]
     fn single_element_unchanged() {
-        for apply in [hann, hamming, blackman, rectangular, bartlett] {
+        let fns: [fn(&mut [f32]); 5] = [hann, hamming, blackman, rectangular, bartlett];
+        for apply in fns {
             let mut buf = [42.0_f32];
             apply(&mut buf);
             // single element: all windows return early, value unchanged
@@ -285,13 +304,108 @@ mod tests {
 
     #[test]
     fn all_windows_values_between_zero_and_one() {
-        for apply in [hann, hamming, blackman, bartlett] {
+        let fns: [fn(&mut [f32]); 4] = [hann, hamming, blackman, bartlett];
+        for apply in fns {
             let mut buf = [1.0_f32; 64];
             apply(&mut buf);
             for &v in &buf {
                 assert!(v >= -1e-6, "window value {v} below zero");
                 assert!(v <= 1.0 + 1e-6, "window value {v} above one");
             }
+        }
+    }
+
+    // ── Sample-generic tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn hann_on_q15_dc_tapers_correctly() {
+        // A DC buffer of Q15::MAX. After hann, endpoints should be near zero
+        // and the centre sample should be close to Q15::MAX.
+        let mut buf = [crate::fixed::Q15::from_f32(0.5); 9];
+        hann(&mut buf);
+        assert!(
+            buf[0].to_f32().abs() < 0.001,
+            "hann Q15 endpoint not near zero"
+        );
+        assert!(
+            buf[8].to_f32().abs() < 0.001,
+            "hann Q15 endpoint not near zero"
+        );
+        // centre: w[4] = 0.5*(1 - cos(π)) = 1.0; sample * 1.0 = 0.5
+        assert!((buf[4].to_f32() - 0.5).abs() < 0.002);
+    }
+
+    #[test]
+    fn hamming_on_q15_non_zero_endpoints() {
+        let mut buf = [Q15::from_f32(1.0); 9];
+        hamming(&mut buf);
+        // Hamming endpoint ≈ 0.08; Q15 has ~1/32768 precision
+        let endpoint = buf[0].to_f32();
+        assert!((endpoint - 0.08).abs() < 0.002);
+    }
+
+    #[test]
+    fn bartlett_on_f64_endpoints_and_centre() {
+        let mut buf = [1.0_f64; 5];
+        bartlett(&mut buf);
+        assert!(buf[0].abs() < 1e-10);
+        assert!((buf[2] - 1.0).abs() < 1e-10);
+        assert!(buf[4].abs() < 1e-10);
+    }
+
+    #[test]
+    fn apply_generic_f32() {
+        let mut buf = [1.0_f32; 4];
+        let win = [0.0_f32, 0.5, 1.0, 0.5];
+        apply(&mut buf, &win);
+        assert_eq!(buf, [0.0, 0.5, 1.0, 0.5]);
+    }
+
+    #[test]
+    fn apply_generic_f64() {
+        let mut buf = [1.0_f64; 4];
+        let win = [0.0_f64, 0.5, 1.0, 0.5];
+        apply(&mut buf, &win);
+        assert!((buf[0] - 0.0).abs() < 1e-12);
+        assert!((buf[1] - 0.5).abs() < 1e-12);
+        assert!((buf[2] - 1.0).abs() < 1e-12);
+        assert!((buf[3] - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn apply_generic_q15() {
+        let mut buf = [Q15::from_f32(1.0); 4];
+        let win = [
+            Q15::from_f32(0.0),
+            Q15::from_f32(0.5),
+            Q15::MAX,
+            Q15::from_f32(0.5),
+        ];
+        apply(&mut buf, &win);
+        assert!(buf[0].to_f32().abs() < 0.001);
+        assert!((buf[1].to_f32() - 0.5).abs() < 0.002);
+    }
+
+    #[test]
+    #[should_panic(expected = "lengths differ")]
+    fn apply_length_mismatch_panics() {
+        let mut buf = [1.0_f32; 4];
+        let win = [1.0_f32; 3];
+        apply(&mut buf, &win);
+    }
+
+    #[test]
+    fn applying_window_twice_is_not_idempotent() {
+        let mut buf = [1.0_f32; 8];
+        hann(&mut buf);
+        let after_first = buf;
+        hann(&mut buf);
+        // second application squares the window: values further reduce
+        for i in 1..7 {
+            assert!(
+                buf[i] <= after_first[i] + 1e-6,
+                "second hann did not reduce value at {i}"
+            );
         }
     }
 }

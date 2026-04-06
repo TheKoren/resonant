@@ -24,10 +24,10 @@ pub mod window;
 pub(crate) mod simd;
 
 pub use fixed::{Q15, Q31};
-pub use sample::Sample;
 pub use ring_buf::RingBuf;
 #[cfg(feature = "alloc")]
 pub use ring_buf_heap::HeapRingBuf;
+pub use sample::Sample;
 pub use signal::{Domain, FreqDomain, Signal, TimeDomain};
 #[cfg(feature = "alloc")]
 pub use sliding_window::SlidingWindow;
