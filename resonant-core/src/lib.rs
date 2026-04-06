@@ -9,6 +9,8 @@ pub mod ring_buf;
 /// Heap-backed circular buffer for runtime-determined capacities.
 #[cfg(feature = "alloc")]
 pub mod ring_buf_heap;
+/// Unified scalar sample type abstraction.
+pub mod sample;
 /// Compile-time domain tracking for signals.
 pub mod signal;
 /// Arithmetic operators for [`Signal`] — element-wise, domain-preserving.
@@ -22,6 +24,7 @@ pub mod window;
 pub(crate) mod simd;
 
 pub use fixed::{Q15, Q31};
+pub use sample::Sample;
 pub use ring_buf::RingBuf;
 #[cfg(feature = "alloc")]
 pub use ring_buf_heap::HeapRingBuf;
