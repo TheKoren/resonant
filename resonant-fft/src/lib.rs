@@ -47,6 +47,9 @@ pub mod dct;
 /// Pure-core radix-2 FFT implementation (power-of-two sizes, no allocation).
 pub mod radix2;
 
+/// Real-valued FFT — half the output bins, roughly half the cost.
+pub mod rfft;
+
 #[cfg(feature = "rustfft")]
 /// FFT backend using `rustfft` — supports arbitrary sizes.
 pub mod rustfft_backend;
@@ -62,9 +65,10 @@ pub(crate) mod simd;
 pub mod stft;
 
 #[cfg(feature = "alloc")]
-pub use ext::{SignalFftExt, SignalFreqExt, SignalIfftExt};
+pub use ext::{SignalFftExt, SignalFreqExt, SignalIfftExt, SignalRfftExt};
 pub use num_complex::Complex;
 pub use radix2::{fft, ifft};
+pub use rfft::{irfft, rfft};
 
 /// Errors that can occur during FFT computation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

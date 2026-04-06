@@ -161,6 +161,57 @@ fn complex_as_flat(bins: &[Complex<f32>]) -> &[f32] {
     unsafe { core::slice::from_raw_parts(bins.as_ptr().cast::<f32>(), bins.len() * 2) }
 }
 
+/// Adds `.rfft()` to time-domain signals, returning a half-spectrum frequency-domain signal.
+///
+/// The output contains N/2+1 complex bins, exploiting conjugate symmetry of real
+/// inputs. This is roughly half the cost and memory of a full complex FFT for the
+/// same sample count.
+///
+/// Calling `.rfft()` on a frequency-domain signal is a compile error:
+///
+/// ```compile_fail
+/// use resonant_core::signal::{Signal, FreqDomain};
+/// use resonant_fft::SignalRfftExt;
+/// use num_complex::Complex;
+///
+/// let freq = Signal::<Vec<Complex<f32>>, FreqDomain>::new(vec![]);
+/// freq.rfft(); // ERROR: SignalRfftExt is not implemented for FreqDomain signals
+/// ```
+pub trait SignalRfftExt {
+    /// Computes the real-valued forward FFT, returning N/2+1 complex bins.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FftError`] if the input length is not a power of two, or is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resonant_core::signal::Signal;
+    /// use resonant_fft::SignalRfftExt;
+    ///
+    /// let sig = Signal::from_samples(vec![1.0_f32, 0.0, -1.0, 0.0]);
+    /// let freq = sig.rfft().unwrap();
+    /// assert_eq!(freq.data().len(), 3); // N/2 + 1 = 3
+    /// ```
+    fn rfft(self) -> Result<Signal<Vec<Complex<f32>>, FreqDomain>, FftError>;
+}
+
+impl<T: AsRef<[f32]>> SignalRfftExt for Signal<T, TimeDomain> {
+    fn rfft(self) -> Result<Signal<Vec<Complex<f32>>, FreqDomain>, FftError> {
+        let samples = self.into_inner();
+        let slice = samples.as_ref();
+        let n = slice.len();
+        if n == 0 {
+            return Err(FftError::Empty);
+        }
+        let m = n / 2;
+        let mut out = vec![Complex::new(0.0_f32, 0.0); m + 1];
+        crate::rfft::rfft(slice, &mut out)?;
+        Ok(Signal::new(out))
+    }
+}
+
 /// Dispatches to the best available backend.
 #[cfg(feature = "rustfft")]
 pub(crate) fn run_fft_forward(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
