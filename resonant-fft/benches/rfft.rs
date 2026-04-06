@@ -59,9 +59,13 @@ fn bench_rfft_magnitude(c: &mut Criterion) {
             b.iter(|| rfft_sig.magnitude());
         });
 
-        group.bench_with_input(BenchmarkId::new("half_spectrum_magnitude", m), &m, |b, _| {
-            b.iter(|| half_sig.magnitude());
-        });
+        group.bench_with_input(
+            BenchmarkId::new("half_spectrum_magnitude", m),
+            &m,
+            |b, _| {
+                b.iter(|| half_sig.magnitude());
+            },
+        );
     }
 
     group.finish();
