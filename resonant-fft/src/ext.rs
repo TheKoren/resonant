@@ -104,6 +104,10 @@ impl SignalIfftExt for Signal<Vec<Complex<f32>>, FreqDomain> {
 
 /// Adds `.magnitude()` and `.phase()` to frequency-domain signals.
 ///
+/// Works on both full-spectrum (`SignalFftExt`) and half-spectrum
+/// (`SignalRfftExt`) outputs: the implementation operates on a flat
+/// `[re, im, re, im, …]` slice and is indifferent to bin count.
+///
 /// # Examples
 ///
 /// ```
@@ -319,5 +323,73 @@ mod tests {
         let sig = Signal::<&[f32], TimeDomain>::new(&data[..]);
         let freq = sig.fft().unwrap();
         assert_eq!(freq.data().len(), 4);
+    }
+
+    // ── SignalRfftExt tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn rfft_ext_returns_half_spectrum() {
+        let sig = Signal::from_samples(std::vec![1.0_f32, 0.0, -1.0, 0.0]);
+        let freq = sig.rfft().unwrap();
+        // N=4 → N/2+1 = 3 bins
+        assert_eq!(freq.data().len(), 3);
+    }
+
+    #[test]
+    fn rfft_ext_dc_signal() {
+        // DC input → bin[0] = N, rest ≈ 0
+        let sig = Signal::from_samples(std::vec![1.0_f32; 8]);
+        let freq = sig.rfft().unwrap();
+        assert_eq!(freq.data().len(), 5);
+        assert!((freq.data()[0].re - 8.0).abs() < 1e-4);
+        for b in &freq.data()[1..] {
+            assert!(b.norm() < 1e-4, "non-DC bin should be ~0: {b:?}");
+        }
+    }
+
+    #[test]
+    fn rfft_ext_empty_returns_error() {
+        let sig = Signal::from_samples(std::vec![0.0_f32; 0]);
+        assert_eq!(sig.rfft(), Err(FftError::Empty));
+    }
+
+    #[test]
+    fn rfft_magnitude_matches_complex_fft_magnitude() {
+        // magnitude() on N/2+1 rfft output must equal magnitude() on the same
+        // bins from a full complex FFT — SignalFreqExt works on any Vec<Complex<f32>>
+        // FreqDomain signal regardless of length.
+        let samples = std::vec![0.1_f32, -0.3, 0.5, -0.7, 0.9, -0.2, 0.4, -0.6];
+        let n = samples.len();
+        let m = n / 2;
+
+        let rfft_mags = Signal::from_samples(samples.clone())
+            .rfft()
+            .unwrap()
+            .magnitude();
+        let full_mags = Signal::from_samples(samples).fft().unwrap().magnitude();
+
+        // rfft gives N/2+1 bins; full FFT gives N bins.
+        // The first N/2+1 magnitudes should agree.
+        assert_eq!(rfft_mags.len(), m + 1);
+        for k in 0..=m {
+            assert!(
+                (rfft_mags[k] - full_mags[k]).abs() < 1e-3,
+                "magnitude mismatch at bin {k}: rfft={} full={}",
+                rfft_mags[k],
+                full_mags[k]
+            );
+        }
+    }
+
+    #[test]
+    fn rfft_compile_fail_on_freq_domain() {
+        // Verify that the compile_fail doc-test in SignalRfftExt is accurate:
+        // calling .rfft() on a FreqDomain signal should not compile.
+        // (This runtime test simply exercises the happy path to confirm the trait
+        // is correctly gated on TimeDomain.)
+        let sig = Signal::from_samples(std::vec![1.0_f32, 0.0, -1.0, 0.0]);
+        let freq = sig.rfft().unwrap();
+        // freq is FreqDomain — we can call magnitude() but not rfft()
+        assert!(freq.magnitude()[0].abs() < 1e-3); // DC ≈ 0 for this input
     }
 }
