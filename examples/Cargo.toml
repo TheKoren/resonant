@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 resonant = { path = "../resonant" }
+resonant-filters = { path = "../resonant-filters" }
 plotters = { version = "0.3.7", default-features = false, features = [
     "bitmap_backend", "bitmap_encoder", "line_series", "all_elements", "ttf",
 ] }
@@ -26,3 +27,7 @@ path = "spectrogram.rs"
 [[bin]]
 name = "window_comparison"
 path = "window_comparison.rs"
+
+[[bin]]
+name = "filter_response_plot"
+path = "filter_response_plot.rs"
