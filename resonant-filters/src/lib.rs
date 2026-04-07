@@ -30,8 +30,12 @@ pub mod response;
 #[cfg(feature = "alloc")]
 pub(crate) mod simd;
 
+/// Nonlinear and analog-modelled filters.
+pub mod nonlinear;
+
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
 #[cfg(feature = "alloc")]
 pub use fir::Fir;
+pub use nonlinear::{MoogLadder, SaturatingBiquad, StateVariableFilter, SvfOutputs};
 #[cfg(feature = "alloc")]
 pub use response::{FilterError, FilterResponseExt, FrequencyResponse};
