@@ -38,4 +38,6 @@ pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
 pub use fir::Fir;
 pub use nonlinear::{MoogLadder, SaturatingBiquad, StateVariableFilter, SvfOutputs};
 #[cfg(feature = "alloc")]
+pub use resample::PolyphaseResampler;
+#[cfg(feature = "alloc")]
 pub use response::{FilterError, FilterResponseExt, FrequencyResponse};
