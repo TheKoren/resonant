@@ -24,8 +24,14 @@ pub mod design;
 pub mod resample;
 
 #[cfg(feature = "alloc")]
+/// Filter frequency response — magnitude and phase computation.
+pub mod response;
+
+#[cfg(feature = "alloc")]
 pub(crate) mod simd;
 
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
 #[cfg(feature = "alloc")]
 pub use fir::Fir;
+#[cfg(feature = "alloc")]
+pub use response::{FilterError, FilterResponseExt, FrequencyResponse};
