@@ -218,8 +218,7 @@ impl FilterResponseExt for Fir {
         // rfft: input N real → N/2+1 complex bins
         let n_bins = fft_len / 2 + 1;
         let mut bins = vec![resonant_fft::Complex::new(0.0_f32, 0.0); n_bins];
-        resonant_fft::rfft(&padded, &mut bins)
-            .map_err(|_| FilterError::InvalidParameter)?;
+        resonant_fft::rfft(&padded, &mut bins).map_err(|_| FilterError::InvalidParameter)?;
 
         // Build output — pick first n_points bins from the N/2+1 available
         let nyquist = sample_rate / 2.0;
@@ -267,16 +266,37 @@ mod tests {
 
     #[test]
     fn biquad_invalid_params() {
-        let c = BiquadCoeffs { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
-        assert_eq!(c.frequency_response(1, 44100.0), Err(FilterError::InvalidParameter));
-        assert_eq!(c.frequency_response(512, 0.0), Err(FilterError::InvalidParameter));
-        assert_eq!(c.frequency_response(512, -1.0), Err(FilterError::InvalidParameter));
+        let c = BiquadCoeffs {
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        };
+        assert_eq!(
+            c.frequency_response(1, 44100.0),
+            Err(FilterError::InvalidParameter)
+        );
+        assert_eq!(
+            c.frequency_response(512, 0.0),
+            Err(FilterError::InvalidParameter)
+        );
+        assert_eq!(
+            c.frequency_response(512, -1.0),
+            Err(FilterError::InvalidParameter)
+        );
     }
 
     #[test]
     fn biquad_passthrough_has_unity_magnitude() {
         // b0=1, all others 0 → flat magnitude 1.0 everywhere
-        let c = BiquadCoeffs { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
+        let c = BiquadCoeffs {
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        };
         let resp = c.frequency_response(64, 44100.0).unwrap();
         for &m in &resp.magnitudes {
             assert!((m - 1.0).abs() < 1e-5, "expected 1.0, got {m}");
@@ -328,7 +348,13 @@ mod tests {
 
     #[test]
     fn biquad_response_output_lengths_match() {
-        let c = BiquadCoeffs { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
+        let c = BiquadCoeffs {
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        };
         let resp = c.frequency_response(128, 48000.0).unwrap();
         assert_eq!(resp.frequencies.len(), 128);
         assert_eq!(resp.magnitudes.len(), 128);
@@ -337,21 +363,39 @@ mod tests {
 
     #[test]
     fn biquad_dc_frequency_is_zero() {
-        let c = BiquadCoeffs { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
+        let c = BiquadCoeffs {
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        };
         let resp = c.frequency_response(64, 44100.0).unwrap();
         assert!((resp.frequencies[0]).abs() < 1e-6);
     }
 
     #[test]
     fn biquad_nyquist_frequency_matches_sample_rate() {
-        let c = BiquadCoeffs { b0: 1.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
+        let c = BiquadCoeffs {
+            b0: 1.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        };
         let resp = c.frequency_response(64, 44100.0).unwrap();
         assert!((resp.frequencies[63] - 22050.0).abs() < 1.0);
     }
 
     #[test]
     fn magnitudes_db_floor_at_minus120() {
-        let c = BiquadCoeffs { b0: 0.0, b1: 0.0, b2: 0.0, a1: 0.0, a2: 0.0 };
+        let c = BiquadCoeffs {
+            b0: 0.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        };
         let resp = c.frequency_response(16, 44100.0).unwrap();
         for &d in &resp.magnitudes_db() {
             assert!(d >= -120.0, "dB floor violated: {d}");
@@ -363,8 +407,14 @@ mod tests {
     #[test]
     fn fir_invalid_params() {
         let fir = Fir::new(vec![1.0_f32]);
-        assert_eq!(fir.frequency_response(1, 44100.0), Err(FilterError::InvalidParameter));
-        assert_eq!(fir.frequency_response(64, 0.0), Err(FilterError::InvalidParameter));
+        assert_eq!(
+            fir.frequency_response(1, 44100.0),
+            Err(FilterError::InvalidParameter)
+        );
+        assert_eq!(
+            fir.frequency_response(64, 0.0),
+            Err(FilterError::InvalidParameter)
+        );
     }
 
     #[test]
@@ -373,7 +423,11 @@ mod tests {
         let n = 16;
         let fir = Fir::new(vec![1.0 / n as f32; n]);
         let resp = fir.frequency_response(256, 44100.0).unwrap();
-        assert!((resp.magnitudes[0] - 1.0).abs() < 1e-3, "DC gain: {}", resp.magnitudes[0]);
+        assert!(
+            (resp.magnitudes[0] - 1.0).abs() < 1e-3,
+            "DC gain: {}",
+            resp.magnitudes[0]
+        );
     }
 
     #[test]
