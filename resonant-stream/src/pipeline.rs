@@ -136,6 +136,41 @@ impl Pipeline {
     pub fn push(&mut self, node: impl DspNode + 'static) {
         self.nodes.push(Box::new(node));
     }
+
+    /// Creates a single-node pipeline from any graph expression.
+    ///
+    /// This is the bridge between the operator-overloaded graph DSL and the
+    /// imperative `Pipeline` type.  Any [`NodeGraph`] value — including nested
+    /// [`Serial`], [`Parallel`], and [`Stack`] combinators — can be wrapped
+    /// into a `Pipeline` for use with the builder API or format validation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resonant_stream::{Chunk, DspNode, Pipeline, StreamError};
+    /// use resonant_stream::graph::GraphExt;
+    ///
+    /// struct Scale(f32);
+    /// impl DspNode for Scale {
+    ///     fn process(&mut self, mut input: Chunk) -> Result<Chunk, StreamError> {
+    ///         for s in input.data_mut() { *s *= self.0; }
+    ///         Ok(input)
+    ///     }
+    ///     fn reset(&mut self) {}
+    /// }
+    ///
+    /// let graph = Scale(2.0).serial(Scale(3.0));
+    /// let mut pipeline = Pipeline::from_graph(graph);
+    ///
+    /// let chunk = Chunk::new(vec![1.0], 44100, 1);
+    /// let out = pipeline.process(chunk).unwrap();
+    /// assert_eq!(out.data(), &[6.0]);
+    /// ```
+    pub fn from_graph(graph: impl crate::graph::NodeGraph) -> Self {
+        let mut p = Self::builder().build();
+        p.push(graph);
+        p
+    }
 }
 
 /// Builder for constructing a [`Pipeline`].

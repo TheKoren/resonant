@@ -45,6 +45,8 @@
 
 mod chunk;
 mod error;
+/// Operator-overloaded graph combinators for pipeline composition.
+pub mod graph;
 mod node;
 /// Built-in processing nodes.
 pub mod nodes;
@@ -52,5 +54,6 @@ mod pipeline;
 
 pub use chunk::Chunk;
 pub use error::StreamError;
+pub use graph::{GraphExt, Parallel, Serial, Stack};
 pub use node::DspNode;
 pub use pipeline::{Pipeline, PipelineBuilder};
