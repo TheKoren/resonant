@@ -33,10 +33,16 @@ pub(crate) mod simd;
 /// Nonlinear and analog-modelled filters.
 pub mod nonlinear;
 
+#[cfg(feature = "alloc")]
+/// Transparent oversampling wrapper for nonlinear processors.
+pub mod oversample;
+
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
 #[cfg(feature = "alloc")]
 pub use fir::Fir;
 pub use nonlinear::{MoogLadder, SaturatingBiquad, StateVariableFilter, SvfOutputs};
+#[cfg(feature = "alloc")]
+pub use oversample::Oversample;
 #[cfg(feature = "alloc")]
 pub use resample::PolyphaseResampler;
 #[cfg(feature = "alloc")]
