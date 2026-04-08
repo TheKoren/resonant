@@ -96,6 +96,16 @@ jobs:
       - run: cargo build -p resonant-fft --target wasm32-unknown-unknown --no-default-features
       - run: cargo build -p resonant-filters --target wasm32-unknown-unknown
 
+  bench:
+    name: Benchmark build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+      - run: cargo bench --no-run --workspace --exclude resonant-examples
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

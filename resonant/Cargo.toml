@@ -19,6 +19,13 @@ symphonia = { version = "0.5", default-features = false, features = [
     "wav", "pcm", "mp3", "flac", "ogg", "vorbis",
 ] }
 
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "facade"
+harness = false
+
 [features]
 default = []
 
