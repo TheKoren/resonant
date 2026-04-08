@@ -28,8 +28,7 @@ fn bench_audio_file_fft(c: &mut Criterion) {
 
     group.bench_function("audio_file_fft_4096", |b| {
         b.iter(|| {
-            let file = AudioFile::from_samples(samples.clone(), SR, 1)
-                .with_window_size(4096);
+            let file = AudioFile::from_samples(samples.clone(), SR, 1).with_window_size(4096);
             criterion::black_box(file.fft().unwrap())
         });
     });
@@ -46,8 +45,7 @@ fn bench_fft_stream(c: &mut Criterion) {
 
     group.bench_function("consume_all_frames_1024", |b| {
         b.iter(|| {
-            let file = AudioFile::from_samples(samples.clone(), SR, 1)
-                .with_window_size(1024);
+            let file = AudioFile::from_samples(samples.clone(), SR, 1).with_window_size(1024);
             let count = file.fft_stream().unwrap().count();
             criterion::black_box(count)
         });
