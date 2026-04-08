@@ -76,5 +76,9 @@ fn bench_polyphase_block_sizes(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_decimate_vs_polyphase, bench_polyphase_block_sizes);
+criterion_group!(
+    benches,
+    bench_decimate_vs_polyphase,
+    bench_polyphase_block_sizes
+);
 criterion_main!(benches);

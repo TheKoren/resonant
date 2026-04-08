@@ -21,6 +21,7 @@
 /// Chroma features — 12-bin pitch class profiles.
 pub mod chroma;
 pub mod error;
+pub(crate) mod mel;
 /// Mel-frequency cepstral coefficients (MFCCs).
 pub mod mfcc;
 /// Onset detection via spectral flux and adaptive thresholding.

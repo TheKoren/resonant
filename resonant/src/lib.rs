@@ -27,6 +27,7 @@
 //! in sub-crate details.
 
 pub mod audio_file;
+pub(crate) mod decode;
 pub mod error;
 pub mod frequency_bin;
 

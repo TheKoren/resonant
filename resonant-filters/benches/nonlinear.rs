@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use resonant_filters::nonlinear::{MoogLadder, SaturatingBiquad, StateVariableFilter};
-use resonant_filters::{Biquad, design};
+use resonant_filters::{design, Biquad};
 
 const SR: f32 = 44100.0;
 const BLOCK: usize = 4096;
@@ -11,8 +11,7 @@ fn make_input() -> Vec<f32> {
 
 /// Compare linear biquad against saturating biquad at various drive levels.
 fn bench_biquad_vs_saturating(c: &mut Criterion) {
-    let coeffs = design::butterworth_lowpass(1000.0, SR as f64)
-        .expect("valid design params");
+    let coeffs = design::butterworth_lowpass(1000.0, SR as f64).expect("valid design params");
     let input = make_input();
     let mut group = c.benchmark_group("biquad_vs_saturating");
     group.throughput(Throughput::Elements(BLOCK as u64));
@@ -88,5 +87,10 @@ fn bench_svf(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_biquad_vs_saturating, bench_moog_ladder, bench_svf);
+criterion_group!(
+    benches,
+    bench_biquad_vs_saturating,
+    bench_moog_ladder,
+    bench_svf
+);
 criterion_main!(benches);
