@@ -8,9 +8,12 @@
 
 - [Windowing](#windowing)
 - [The Fourier Transform (FFT)](#the-fourier-transform-fft)
+- [Real-Valued FFT (rfft)](#real-valued-fft-rfft)
 - [Short-Time Fourier Transform (STFT)](#short-time-fourier-transform-stft)
 - [Fixed-Point Arithmetic](#fixed-point-arithmetic)
 - [Filters](#filters)
+- [Nonlinear Filters](#nonlinear-filters)
+- [Polyphase Resampling](#polyphase-resampling)
 - [Spectral Analysis](#spectral-analysis)
 - [Building for Embedded and WASM](#building-for-embedded-and-wasm)
 - [SIMD Acceleration](#simd-acceleration)
@@ -128,6 +131,96 @@ let freq_signal: Signal<Complex32, FreqDomain> = time_signal.fft();
 ```
 
 This prevents an entire class of bugs at compile time.
+
+---
+
+## Real-Valued FFT (rfft)
+
+### Conjugate symmetry of real inputs
+
+When the input to an FFT is purely real (no imaginary part), the output is not
+arbitrary — it has **conjugate symmetry**:
+
+```
+X[k] = conj(X[N - k])
+```
+
+This means bin `k` and bin `N - k` carry the same information (one is the complex
+conjugate of the other). Half the FFT output is redundant. The real-valued FFT (rfft)
+exploits this to return only the **unique** bins: indices 0 through N/2, giving
+**N/2 + 1** complex values instead of N.
+
+All audio signals are real — there is no physical interpretation of an imaginary
+sample value. Using `rfft` instead of the full complex FFT gives roughly:
+
+- **~40% lower CPU** — the transform works on half the data internally
+- **Half the output memory** — N/2+1 bins vs N bins
+- **Identical results** for the unique half of the spectrum
+
+### Bin count and frequency mapping
+
+For N input samples at sample rate `fs`, `rfft` returns N/2+1 bins. The frequency
+of bin k is:
+
+```
+f_k = k × fs / N     (k = 0, 1, …, N/2)
+```
+
+Bin 0 is DC (0 Hz). Bin N/2 is the Nyquist frequency (fs/2). Bins beyond N/2 are
+the conjugate mirror and are not returned.
+
+### When to use rfft vs fft
+
+| Situation | Use |
+|---|---|
+| Audio analysis, spectral features, STFT frames | `rfft` — input is always real |
+| Signal has a complex component (e.g. analytic signal after Hilbert) | `fft` |
+| You need the full complex spectrum for convolution in frequency domain | `rfft` (the product of two rfft outputs is their circular convolution) |
+| Computing on non-power-of-two lengths with the `rustfft` backend | `fft` — rfft is radix-2 only in the no-alloc path |
+
+### Code example
+
+```rust,ignore
+use resonant_fft::SignalRfftExt;
+use resonant_core::Signal;
+
+let samples: Vec<f32> = (0..1024)
+    .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 44100.0).sin())
+    .collect();
+
+let signal = Signal::from_samples(samples);
+let freq = signal.rfft().unwrap();
+// freq contains 513 complex bins (1024/2 + 1)
+
+// Magnitude at bin k
+let mags = freq.magnitude();
+assert_eq!(mags.len(), 513);
+```
+
+For the inverse transform, `irfft` reconstructs N real samples from the N/2+1
+complex bins. The original signal length must be provided because the bin count
+alone is ambiguous (both N=1024 and N=1023 produce 512 bins):
+
+```rust,ignore
+use resonant_fft::irfft;
+
+let mut reconstructed = vec![0.0_f32; 1024];
+irfft(&freq_bins, &mut reconstructed).unwrap();
+```
+
+### No-alloc usage
+
+The underlying `rfft` and `irfft` functions are `no_std`, `no_alloc`, operating on
+caller-provided output buffers:
+
+```rust,ignore
+use resonant_fft::rfft;
+use resonant_fft::Complex;
+
+let input = [0.0_f32; 1024];
+let mut out = [Complex::new(0.0, 0.0); 513]; // N/2 + 1
+rfft(&input, &mut out).unwrap();
+```
 
 ---
 
@@ -426,6 +519,279 @@ use resonant_filters::resample;
 // Decimate from 48 kHz to 16 kHz (factor 3)
 let output = resample::decimate(&input, 3, 48000.0).unwrap();
 ```
+
+---
+
+## Nonlinear Filters
+
+### Why linear filters aren't enough
+
+A linear filter obeys superposition: `filter(a + b) = filter(a) + filter(b)`. This is
+mathematically clean, but it means a linear filter can only attenuate or amplify
+frequencies — it cannot create new ones.
+
+Real analog circuits, magnetic tape, and vacuum tubes are *nonlinear*. When audio is
+pushed hard through them, the output contains **harmonics** — frequencies that were not
+present in the input. A pure 440 Hz sine through a driven tube amplifier produces energy
+at 880 Hz, 1320 Hz, and so on. This harmonic saturation is the sound of "warmth" and
+"character" that musicians seek.
+
+Software models of these effects must incorporate nonlinearity.
+
+### The tanh waveshaper
+
+The simplest nonlinearity is a **waveshaper**: a function applied point-by-point to
+the signal. The hyperbolic tangent (`tanh`) is the standard choice because:
+
+- It is smooth and differentiable (no discontinuities)
+- It is bounded: `tanh(x) → ±1` as `x → ±∞` (soft clip, not hard clip)
+- It matches the saturation curve of real transistors reasonably well
+- It is cheap to compute on modern hardware
+
+```
+output = tanh(drive × input) / tanh(drive)
+```
+
+The `drive` parameter controls how far into saturation the signal is pushed:
+
+- `drive → 0`: nearly linear — `tanh(x)/x → 1` for small x
+- `drive = 1`: noticeable harmonic generation, peak amplitude unchanged
+- `drive >> 1`: hard limiting, output approaches ±1
+
+resonant's `SaturatingBiquad` blends the linear and nonlinear paths:
+
+```
+output = (1 − drive) × linear_output + drive × tanh(linear_output)
+```
+
+At `drive = 0.0` the filter is identical to a plain `Biquad`. At `drive = 1.0` the
+output is fully saturated.
+
+```rust
+use resonant_filters::{design, nonlinear::SaturatingBiquad};
+
+let coeffs = design::butterworth_lowpass(2000.0, 44100.0).unwrap();
+let mut filter = SaturatingBiquad::new(coeffs, 0.7); // 70% saturation
+
+let y = filter.process_sample(0.8); // pushed into soft saturation
+assert!(y.is_finite());
+assert!(y.abs() <= 1.0 + 1e-4);
+```
+
+### Moog ladder filter topology
+
+The **Moog ladder** is a 4th-order resonant lowpass designed to model the transistor
+ladder circuit in the Minimoog synthesizer. It produces a distinctively warm, musical
+lowpass that self-oscillates at high resonance — a feature with no equivalent in linear
+filter design.
+
+The topology is four cascaded first-order sections with nonlinear (tanh) feedback
+from the output back to the input:
+
+```
+x[n] → [tanh] → [pole 1] → [pole 2] → [pole 3] → [pole 4] → y[n]
+          ↑_______________resonance × y[n]_____________________↑
+```
+
+Each pole adds 6 dB/octave rolloff; the cascade gives 24 dB/octave. The resonance
+feedback creates a peak at the cutoff frequency — increasing resonance narrows and
+amplifies this peak until the loop gain exceeds unity and the filter **self-oscillates**:
+it produces a sustained tone at the cutoff frequency even with zero input.
+
+Parameters:
+- `cutoff` — normalised frequency: 0.0 = DC, 1.0 = Nyquist
+- `resonance` — feedback amount: 0.0 = damped, 4.0 = self-oscillation threshold
+
+```rust
+use resonant_filters::nonlinear::MoogLadder;
+
+let mut ladder = MoogLadder::new(0.3, 2.5); // cutoff 30%, moderate resonance
+
+// Process a block
+let output: Vec<f32> = (0..256)
+    .map(|i| ladder.process_sample((i as f32 * 0.05).sin()))
+    .collect();
+```
+
+At `resonance = 4.0` the filter self-oscillates — feeding it a single impulse and
+then silence produces a sustained sinusoid at the cutoff frequency.
+
+### State-variable filter (SVF): four outputs from one pass
+
+A conventional filter computes one output type (lowpass, or highpass, etc.). The
+**state-variable filter** (SVF) computes all four simultaneously from a single pass
+through the signal, at the same CPU cost as one:
+
+- **Lowpass** (LP) — attenuates above cutoff
+- **Highpass** (HP) — attenuates below cutoff
+- **Bandpass** (BP) — peak at cutoff, rolls off in both directions
+- **Notch** — dip at cutoff (= LP + HP)
+
+The Chamberlin SVF formulation uses two integrators in a loop:
+
+```
+hp  = x − lp − damp × bp
+bp += f0 × hp
+lp += f0 × bp
+notch = lp + hp
+```
+
+Where `f0 = 2 × sin(π × fc / fs)` and `damp = 1/Q`.
+
+The LP + HP identity (`lp + hp = x − damp × bp`) means the sum of the lowpass and
+highpass outputs approximates the input when Q is high — an exact allpass property
+in the limit.
+
+```rust
+use resonant_filters::nonlinear::StateVariableFilter;
+
+let mut svf = StateVariableFilter::new(
+    1000.0, // cutoff Hz
+    1.0,    // Q
+    44100.0 // sample rate Hz
+);
+
+let out = svf.process(0.5);
+println!("LP={:.3} HP={:.3} BP={:.3} Notch={:.3}",
+    out.lp, out.hp, out.bp, out.notch);
+```
+
+The SVF is ideal when you need to morph between filter types smoothly (e.g. an
+LP → HP crossfade) or extract the bandpass for a resonance detector, without paying
+the CPU cost of running three separate filters.
+
+### Filter frequency response with nonlinear filters
+
+Because nonlinear filters have no closed-form transfer function `H(z)`, their
+frequency response is estimated via a **sine sweep**: drive the filter with a pure
+sine at each analysis frequency, let it settle, then measure the peak output
+amplitude relative to the input peak.
+
+```rust,ignore
+use resonant_filters::nonlinear::MoogLadder;
+use resonant_filters::response::FilterResponseExt;
+
+let filter = MoogLadder::new(0.4, 1.0);
+let resp = filter.frequency_response(256, 44100.0).unwrap();
+
+// Print the frequency response table
+for (f, m) in resp.frequencies.iter().zip(resp.magnitudes.iter()) {
+    println!("{:8.1} Hz  {:+.1} dB", f, 20.0 * m.log10());
+}
+```
+
+The result reflects the operating point at unity-gain input — a driven filter at
+high input amplitude will measure differently because the saturation state changes.
+
+---
+
+## Polyphase Resampling
+
+### The problem with integer decimation
+
+Simple decimation keeps every M-th sample after lowpass filtering. This is efficient
+for integer ratios (e.g. 48 kHz → 16 kHz, M = 3) but cannot express arbitrary
+rational ratios like 44100 Hz → 48000 Hz (ratio 147:160).
+
+A naïve approach would upsample by 160 (insert 159 zeros between each sample),
+apply a lowpass filter, then downsample by 147 — but this requires processing at
+160× the original rate, which is prohibitively expensive.
+
+### The polyphase decomposition
+
+The **polyphase decomposition** restructures the problem to process at the *output*
+rate, not at the intermediate upsampled rate.
+
+Starting from a single FIR lowpass filter `h[n]` of length `L = P × taps_per_phase`:
+
+1. Split `h` into `P` **sub-filters** (polyphase branches), one per upsample phase:
+   ```
+   E_p[k] = h[p + k × P]     (p = 0, 1, …, P-1;  k = 0, 1, …, taps_per_phase-1)
+   ```
+   Each sub-filter `E_p` has `taps_per_phase` coefficients.
+
+2. To produce output sample `m`, identify which phase `p = m mod P` is active and
+   how many input samples have been consumed: `m // P × Q` samples per output period.
+
+3. Convolve the input history with sub-filter `E_p` only — never the full FIR.
+
+The result: each output sample costs `taps_per_phase` multiplications, regardless of
+the upsample factor P. Processing 44100→48000 (P=160, Q=147) costs the same per
+sample as 2:1 upsampling.
+
+### Anti-alias filter design
+
+The anti-alias FIR is designed as a **windowed-sinc lowpass** at the stricter of the
+two Nyquist frequencies: `cutoff = 0.5 / max(P, Q)`. resonant uses the Blackman
+window, which gives ~74 dB stopband attenuation.
+
+`taps_per_phase` controls the trade-off between quality and CPU:
+
+| `taps_per_phase` | Stopband | Startup latency | Use case |
+|---|---|---|---|
+| 8 | ~55 dB | Short | Real-time, modest quality |
+| 16 (default) | ~74 dB | Medium | General audio |
+| 32 | ~90 dB | Long | Mastering, archival |
+
+### Using PolyphaseResampler
+
+```rust
+use resonant_filters::resample::PolyphaseResampler;
+
+// 44100 → 48000 Hz  (up=160, down=147 after GCD reduction)
+let mut r = PolyphaseResampler::new(160, 147).unwrap();
+
+let input: Vec<f32> = (0..44100).map(|i| (i as f32 * 0.1).sin()).collect();
+let output = r.process(&input);
+
+// Expect approximately 44100 × 160/147 = 48000 samples
+assert!((output.len() as i64 - 48000).abs() <= 2);
+```
+
+For streaming (zero-alloc inner loop), use `process_into` which appends to an
+existing buffer:
+
+```rust,ignore
+let mut out_buf = Vec::with_capacity(expected_len);
+r.process_into(&input_chunk, &mut out_buf);
+```
+
+`reset()` clears the ring buffer and phase index, making the resampler behave as if
+newly constructed — useful when switching between unrelated audio segments.
+
+### SNR considerations
+
+The signal-to-noise ratio of a resampled signal is limited by the stopband attenuation
+of the anti-alias FIR. With the default 16 taps per phase and Blackman window, you
+can expect:
+
+- **Passband ripple**: < 0.01 dB for frequencies below 90% of the lower Nyquist
+- **Stopband attenuation**: ~74 dB (Blackman window)
+- **THD+N**: well below -70 dBFS for a full-scale sine at 1 kHz
+
+For reference, 16-bit CD audio requires ~96 dB dynamic range. The default quality is
+sufficient for 16-bit distribution; use `with_quality(up, down, 32)` for 24-bit
+mastering.
+
+### Oversampling for nonlinear processing
+
+Running a saturating processor at 2× or 4× the nominal sample rate reduces aliasing
+from the nonlinear harmonics back into the audible band. The `Oversample<N>` wrapper
+handles the upsample → process → downsample cycle:
+
+```rust,ignore
+use resonant_filters::{design, nonlinear::SaturatingBiquad, oversample::Oversample};
+
+let coeffs = design::butterworth_lowpass(3000.0, 44100.0).unwrap();
+let mut drive = SaturatingBiquad::new(coeffs, 0.9);
+
+let mut os: Oversample<4> = Oversample::new(44100.0);
+let output = os.process(&input, |x| drive.process_sample(x));
+// `output` is at 44100 Hz; the distortion was computed at 176400 Hz
+```
+
+For `N = 1`, `Oversample` is a zero-overhead passthrough — the upsamplers are
+never created.
 
 ---
 
