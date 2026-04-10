@@ -57,6 +57,7 @@ unsafe fn magnitude_sse(flat: &[f32], out: &mut [f32]) {
 /// Compute squared magnitude: `re² + im²` for interleaved `[re, im, ...]` pairs.
 #[cfg(target_arch = "x86_64")]
 pub(crate) fn magnitude_squared(flat: &[f32], out: &mut [f32]) {
+    // SAFETY: SSE2 is guaranteed on all x86_64 targets.
     unsafe { magnitude_squared_sse(flat, out) }
 }
 

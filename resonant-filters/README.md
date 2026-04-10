@@ -1,22 +1,16 @@
 # resonant-filters
 
-FIR/IIR filters and design helpers for audio DSP.
+FIR/IIR filters, design helpers, and sample-rate conversion for audio DSP.
 
 Part of the [resonant](https://crates.io/crates/resonant) workspace.
 
-## Features
+## Biquad filter — `no_std`, `no_alloc`
 
-- **Biquad filter** — direct form II transposed, second-order IIR with accessible state
-- **FIR filter** — arbitrary coefficient vector with circular delay line (requires `alloc`)
-- **Butterworth design** — `butterworth_lowpass()` and `butterworth_highpass()` with bilinear transform and frequency pre-warping
-- **Integer decimation** — `decimate()` with cascaded 4th-order Butterworth anti-alias filter (requires `alloc`)
+Second-order IIR in direct form II transposed. Works on bare-metal targets.
 
-## Usage
-
-```rust,ignore
+```rust
 use resonant_filters::{Biquad, design};
 
-// Design a 1 kHz lowpass at 44.1 kHz sample rate
 let coeffs = design::butterworth_lowpass(1000.0, 44100.0).unwrap();
 let mut filter = Biquad::new(coeffs);
 
@@ -25,24 +19,40 @@ for sample in audio.iter_mut() {
 }
 ```
 
-```rust,ignore
+## FIR filter — requires `alloc`
+
+Arbitrary coefficient vector with a circular delay line. SIMD-accelerated dot product (SSE2 / NEON / scalar).
+
+## Nonlinear filters
+
+Analog-modelled processors for saturation and tonal shaping:
+
+- `SaturatingBiquad` — biquad with tanh waveshaper on the state variables
+- `MoogLadder` — four cascaded 1-pole sections with nonlinear feedback
+- `StateVariableFilter` — Chamberlin SVF with simultaneous lowpass/highpass/bandpass outputs
+
+## Decimation and resampling — requires `alloc`
+
+```rust
 use resonant_filters::resample;
 
-// Decimate from 48 kHz to 16 kHz (factor 3)
+// Integer decimation (48 kHz → 16 kHz)
 let output = resample::decimate(&input, 3, 48000.0).unwrap();
+
+// Polyphase resampling (arbitrary rational ratios)
+use resonant_filters::resample::PolyphaseResampler;
+let mut resampler = PolyphaseResampler::new(44100, 48000, 32)?;
+resampler.process_into(&input, &mut output);
 ```
 
 ## Feature flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `alloc` | yes | Enables `Fir`, `decimate()`, and other heap-allocating APIs |
+| `alloc` | yes | Enables `Fir`, `decimate()`, `PolyphaseResampler`, nonlinear filters |
 
-The `Biquad` filter and Butterworth design helpers work without `alloc` on bare-metal targets.
+The `Biquad` filter and Butterworth design helpers work without `alloc` on any target with `core`.
 
-## Roadmap
+## License
 
-- Interpolation (integer upsample with anti-image filtering)
-- Polyphase resampler for efficient non-integer rate conversion
-- Higher-order filter design (Chebyshev, elliptic)
-- Notch / bandpass / allpass design helpers
+MIT OR Apache-2.0

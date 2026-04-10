@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [0.1.0] - 2026-04-02
 
 ### Added
@@ -21,7 +23,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `TempoEstimator` — tempo estimation via autocorrelation of onset strength envelope with octave correction
 - `MfccExtractor` — mel-frequency cepstral coefficients with delta and delta-delta support
 - `ChromaExtractor` — 12-bin pitch class profiles with configurable tuning
-
-## [Unreleased]
-
-

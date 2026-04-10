@@ -20,16 +20,16 @@ unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     let remainder = len % 4;
 
     // SAFETY: vld1q_f32 reads 4 contiguous f32s. Pointer range is valid via `chunks`.
-    let mut acc = unsafe { vdupq_n_f32(0.0) };
+    let mut acc = vdupq_n_f32(0.0);
     for i in 0..chunks {
         let offset = i * 4;
-        let va = unsafe { vld1q_f32(a.as_ptr().add(offset)) };
-        let vb = unsafe { vld1q_f32(b.as_ptr().add(offset)) };
-        acc = unsafe { vfmaq_f32(acc, va, vb) };
+        let va = vld1q_f32(a.as_ptr().add(offset));
+        let vb = vld1q_f32(b.as_ptr().add(offset));
+        acc = vfmaq_f32(acc, va, vb);
     }
 
     // Horizontal sum
-    let mut sum = unsafe { vaddvq_f32(acc) };
+    let mut sum = vaddvq_f32(acc);
 
     // Scalar tail
     let tail_start = chunks * 4;
