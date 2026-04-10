@@ -27,7 +27,7 @@ for bin in &bins[..5] {
 
 ```toml
 [dependencies]
-resonant = "0.0.1"
+resonant = "0.1"
 ```
 
 ### One-shot FFT
@@ -111,8 +111,8 @@ See [`examples/README.md`](../examples/README.md) for details and sample output.
 | [resonant-core](https://crates.io/crates/resonant-core) | `no_std`, zero-allocation DSP foundation |
 | [resonant-fft](https://crates.io/crates/resonant-fft) | Type-safe FFT, STFT, DCT |
 | [resonant-filters](https://crates.io/crates/resonant-filters) | FIR/IIR filters and design helpers |
-| [resonant-stream](https://crates.io/crates/resonant-stream) | Async streaming DSP pipeline (planned) |
-| [resonant-analysis](https://crates.io/crates/resonant-analysis) | Onset, beat, pitch, MFCC analysis (planned) |
+| [resonant-stream](https://crates.io/crates/resonant-stream) | Streaming DSP pipeline with pull-based processing |
+| [resonant-analysis](https://crates.io/crates/resonant-analysis) | Onset, pitch, tempo, MFCC, chroma analysis |
 | [resonant](https://crates.io/crates/resonant) | Ergonomic facade — this crate |
 
 ## License

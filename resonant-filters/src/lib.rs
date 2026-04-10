@@ -1,5 +1,8 @@
 #![no_std]
 #![warn(missing_docs)]
+// Several modules import `num_traits::float::Float as _` to make transcendental
+// methods available on f32 in no_std builds. The #[allow(unused_imports)] is needed
+// because the trait is only used for implicit method resolution, not by name.
 
 //! `resonant-filters` — FIR/IIR filters and design helpers.
 //!

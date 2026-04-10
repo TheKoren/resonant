@@ -1,6 +1,10 @@
 #![no_std]
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
+// `use num_traits::float::Float as _` appears in modules that call transcendental
+// methods (.sin, .cos, .sqrt, .ln, .log10, .tanh, .powf) on f32/f64 without std.
+// The import is sometimes marked #[allow(unused_imports)] because the trait only
+// needs to be in scope for method resolution — no explicit trait path is required.
 
 /// Fixed-point arithmetic types (`Q15`, `Q31`).
 pub mod fixed;

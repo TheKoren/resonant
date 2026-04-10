@@ -160,23 +160,15 @@ let b = Q15::from_f32(0.25);
 let c = a.saturating_add(b); // 0.75, no overflow risk
 ```
 
-## Features
+## Features and targets
 
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `alloc` | no | Enables `SlidingWindow<T>`, `HeapRingBuf<T>`, and `Signal<Vec<f32>, D>` operators |
 
-## Targets
-
-- `no_std` by default — works on bare-metal and WASM
-- Tested on `x86_64` and should work on any target with `core`
+- `no_std` by default — works on bare-metal, embedded, and WASM targets
 - No floating-point requirement unless you use `window` or `f32`-based `Signal`
-
-## Roadmap (resonant-core)
-
-- **v0.1.0** ✓ — `Signal<T, D>` type-state, ring buffers, window functions, fixed-point types, SIMD dispatch
-- **v0.2.0** — `Sample` trait (done), signal arithmetic (done), generic window functions (done),
-  real-valued FFT support, polyphase resampling primitives
+- SIMD-accelerated window application (SSE2 / NEON / scalar fallback)
 
 ## License
 

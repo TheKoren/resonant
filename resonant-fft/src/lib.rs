@@ -1,5 +1,9 @@
 #![cfg_attr(not(feature = "alloc"), no_std)]
 #![warn(missing_docs)]
+// Several modules import `num_traits::float::Float as _` to bring transcendental
+// methods (.sin, .cos, .sqrt, .tanh) into scope on f32/f64 in no_std builds.
+// The #[allow(unused_imports)] suppresses the lint because Rust considers it unused
+// when the only use is implicit method resolution through the trait bound.
 
 //! `resonant-fft` — type-safe FFT, STFT, and DCT transforms.
 //!

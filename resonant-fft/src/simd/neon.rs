@@ -43,6 +43,7 @@ unsafe fn magnitude_neon(flat: &[f32], out: &mut [f32]) {
 /// Compute squared magnitude: `re² + im²`.
 #[cfg(target_arch = "aarch64")]
 pub(crate) fn magnitude_squared(flat: &[f32], out: &mut [f32]) {
+    // SAFETY: NEON is guaranteed on all aarch64 targets.
     unsafe { magnitude_squared_neon(flat, out) }
 }
 
