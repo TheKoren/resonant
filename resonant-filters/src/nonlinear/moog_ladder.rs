@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use num_traits::float::Float as _;
+
 /// 4th-order resonant lowpass based on the Moog ladder topology.
 ///
 /// Uses four cascaded 1-pole sections with nonlinear (tanh) feedback.
