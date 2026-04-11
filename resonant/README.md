@@ -27,7 +27,7 @@ for bin in &bins[..5] {
 
 ```toml
 [dependencies]
-resonant = "0.1"
+resonant = "0.2"
 ```
 
 ### One-shot FFT

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-11
+
+### Added
+- `rfft` / `irfft` — real-valued FFT returning N/2+1 bins; `no_alloc` radix-2 path and `rustfft`-backed arbitrary-length path
+- `SignalRfftExt` extension trait — `.rfft()` on `Signal<Vec<f32>, TimeDomain>`
+- Criterion benchmark for rfft vs complex FFT (`benches/rfft.rs`, `benches/fft_comparison.rs`)
+
 ## [0.1.0] - 2026-04-02
 
 ### Added

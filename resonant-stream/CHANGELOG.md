@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-11
+
+### Added
+- Graph composition operators: `>>` (serial), `&` (parallel sum), `|` (stack) on any `DspNode`
+- `Serial<A, B>`, `Parallel<A, B>`, `Stack<A, B>` concrete types implementing `DspNode`
+- `Pipeline::from_graph()` — accepts any composed graph as a pipeline source
+
 ## [0.1.0] - 2026-04-02
 
 ### Changed

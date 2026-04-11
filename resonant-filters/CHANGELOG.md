@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-11
+
+### Added
+- `FrequencyResponse` struct and `FilterResponseExt` trait — analytic H(z) evaluation for `BiquadCoeffs`; FFT-based response for `Fir`
+- `SaturatingBiquad` — biquad with tanh waveshaper; `drive` controls saturation amount
+- `MoogLadder` — Huovilainen 4th-order resonant lowpass with nonlinear feedback, self-oscillates at `resonance = 4.0`
+- `StateVariableFilter` — two-integrator SVF with simultaneous LP/HP/BP/notch outputs
+- `PolyphaseResampler` — arbitrary rational P:Q resampling with auto-designed anti-alias FIR
+- `Oversample<const N: usize>` — transparent 2×/4×/8× oversampling wrapper for nonlinear processors
+- `design::sinc_lowpass()` — windowed-sinc FIR design helper
+- Criterion benchmarks for resampler and nonlinear filters (`benches/resample.rs`, `benches/nonlinear.rs`)
+
 ## [0.1.0] - 2026-04-02
 
 ### Added
