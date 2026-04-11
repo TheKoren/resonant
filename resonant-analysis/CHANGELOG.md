@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-11
+
+### Changed
+- Mel-scale helpers (`hz_to_mel`, `mel_to_hz`, `build_mel_filterbank`, `apply_mel_filterbank`, `log_mel_energy`) extracted to internal `mel` module; public API unchanged
+
 ## [0.1.0] - 2026-04-02
 
 ### Added

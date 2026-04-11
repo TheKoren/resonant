@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-11
+
 ### Added
 - `RingBuf<T, N>`: `peek`, `as_slices`, `iter`, `drain`, `is_full`, `capacity` methods;
   `RingBufIter` and `RingBufDrain` iterators with `ExactSizeIterator`

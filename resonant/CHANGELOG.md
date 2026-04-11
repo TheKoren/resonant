@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-11
+
+### Added
+- Re-exports for `PolyphaseResampler`, `MoogLadder`, `SaturatingBiquad`, `StateVariableFilter`, `SvfOutputs`, `Oversample`, `FilterResponseExt`, `FrequencyResponse`, `FilterError`
+- End-to-end Criterion benchmark (`benches/facade.rs`)
+
+### Changed
+- Audio decoding path extracted to internal `decode` module; `AudioFile::open()` API unchanged
+- All inter-crate dependencies bumped to 0.2.0
+
 ## [0.1.0] - 2026-04-02
 
 ### Added
