@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use num_traits::float::Float as _;
+
 use crate::BiquadCoeffs;
 
 /// Biquad filter with a tanh waveshaper applied to the output and state updates.
