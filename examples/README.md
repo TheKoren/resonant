@@ -55,7 +55,7 @@ Outputs `spectrogram.png` in the current directory.
 cargo run -p resonant-examples --bin spectrogram -- assets/test.wav
 ```
 
-![spectrogram](../spectrogram.png)
+![spectrogram](spectrogram.png)
 
 ## window_comparison
 
@@ -67,7 +67,7 @@ No audio file needed — the sine wave is synthesised internally. Outputs `windo
 cargo run -p resonant-examples --bin window_comparison
 ```
 
-![window_comparison](../window_comparison.png)
+![window_comparison](window_comparison.png)
 
 What to look for:
 - **Rectangular** (red): narrowest main lobe, but highest side lobes — most spectral leakage
