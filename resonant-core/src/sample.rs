@@ -18,8 +18,27 @@ use crate::fixed::{Q15, Q31};
 /// # Implementing
 ///
 /// All provided methods (`zero`, `one`) delegate to `from_f32`, so only the
-/// four required methods need to be implemented.
+/// four required methods and three associated constants need to be implemented.
 pub trait Sample: Copy + Clone + PartialOrd + Default {
+    /// The minimum representable value for this type.
+    ///
+    /// For `f32`/`f64` this is the most negative finite value. For integer and
+    /// fixed-point types it is the value that maps to −1.0 in the normalised
+    /// \[−1.0, 1.0) range.
+    const MIN: Self;
+
+    /// The maximum representable value for this type.
+    ///
+    /// For `f32`/`f64` this is the most positive finite value. For integer and
+    /// fixed-point types it is the value that maps to just below +1.0.
+    const MAX: Self;
+
+    /// Number of bits in the underlying storage.
+    ///
+    /// Useful for format conversion and dynamic range calculations
+    /// (`6.02 * BITS` gives the theoretical SNR in dB for a linear PCM type).
+    const BITS: u32;
+
     /// Converts this sample to `f32`.
     fn to_f32(self) -> f32;
 
@@ -48,6 +67,10 @@ pub trait Sample: Copy + Clone + PartialOrd + Default {
 // ── f32 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for f32 {
+    const MIN: Self = f32::MIN;
+    const MAX: Self = f32::MAX;
+    const BITS: u32 = 32;
+
     #[inline]
     fn to_f32(self) -> f32 {
         self
@@ -72,6 +95,10 @@ impl Sample for f32 {
 // ── f64 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for f64 {
+    const MIN: Self = f64::MIN;
+    const MAX: Self = f64::MAX;
+    const BITS: u32 = 64;
+
     #[inline]
     fn to_f32(self) -> f32 {
         self as f32
@@ -98,6 +125,10 @@ impl Sample for f64 {
 // Maps [i16::MIN, i16::MAX] → [-1.0, ~1.0) (same convention as Q15).
 
 impl Sample for i16 {
+    const MIN: Self = i16::MIN;
+    const MAX: Self = i16::MAX;
+    const BITS: u32 = 16;
+
     #[inline]
     fn to_f32(self) -> f32 {
         self as f32 / 32768.0
@@ -138,6 +169,10 @@ impl Sample for i16 {
 // Maps [i32::MIN, i32::MAX] → [-1.0, ~1.0) (same convention as Q31).
 
 impl Sample for i32 {
+    const MIN: Self = i32::MIN;
+    const MAX: Self = i32::MAX;
+    const BITS: u32 = 32;
+
     #[inline]
     fn to_f32(self) -> f32 {
         self.to_f64() as f32
@@ -169,6 +204,10 @@ impl Sample for i32 {
 // ── Q15 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for Q15 {
+    const MIN: Self = Q15::MIN;
+    const MAX: Self = Q15::MAX;
+    const BITS: u32 = 16;
+
     #[inline]
     fn to_f32(self) -> f32 {
         Q15::to_f32(self)
@@ -193,6 +232,10 @@ impl Sample for Q15 {
 // ── Q31 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for Q31 {
+    const MIN: Self = Q31::MIN;
+    const MAX: Self = Q31::MAX;
+    const BITS: u32 = 32;
+
     #[inline]
     fn to_f32(self) -> f32 {
         Q31::to_f32(self)
@@ -217,6 +260,78 @@ impl Sample for Q31 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── MIN / MAX / BITS ─────────────────────────────────────────────────────
+
+    #[test]
+    fn bits_constants() {
+        assert_eq!(f32::BITS, 32);
+        assert_eq!(f64::BITS, 64);
+        assert_eq!(i16::BITS, 16);
+        assert_eq!(i32::BITS, 32);
+        assert_eq!(Q15::BITS, 16);
+        assert_eq!(Q31::BITS, 32);
+    }
+
+    #[test]
+    fn f32_min_max() {
+        assert_eq!(<f32 as Sample>::MIN, f32::MIN);
+        assert_eq!(<f32 as Sample>::MAX, f32::MAX);
+        assert!(<f32 as Sample>::MIN < 0.0);
+        assert!(<f32 as Sample>::MAX > 0.0);
+    }
+
+    #[test]
+    fn f64_min_max() {
+        assert_eq!(<f64 as Sample>::MIN, f64::MIN);
+        assert_eq!(<f64 as Sample>::MAX, f64::MAX);
+    }
+
+    #[test]
+    fn i16_min_max() {
+        assert_eq!(<i16 as Sample>::MIN, i16::MIN);
+        assert_eq!(<i16 as Sample>::MAX, i16::MAX);
+        // Normalised range: MIN ≈ −1.0, MAX < 1.0
+        assert!((<i16 as Sample>::MIN).to_f32() <= -1.0 + 1e-5);
+        assert!((<i16 as Sample>::MAX).to_f32() < 1.0);
+    }
+
+    #[test]
+    fn i32_min_max() {
+        assert_eq!(<i32 as Sample>::MIN, i32::MIN);
+        assert_eq!(<i32 as Sample>::MAX, i32::MAX);
+        assert!((<i32 as Sample>::MIN).to_f64() <= -1.0 + 1e-9);
+        // i32::MAX / 2^31 is just below 1.0 — check in f64 to avoid f32 rounding to 1.0
+        assert!((<i32 as Sample>::MAX).to_f64() < 1.0);
+    }
+
+    #[test]
+    fn q15_min_max() {
+        assert_eq!(<Q15 as Sample>::MIN, Q15::MIN);
+        assert_eq!(<Q15 as Sample>::MAX, Q15::MAX);
+        // Q15::MIN → −1.0, Q15::MAX → just below +1.0
+        assert!((<Q15 as Sample>::MIN).to_f32() <= -1.0 + 1e-5);
+        assert!((<Q15 as Sample>::MAX).to_f32() > 0.0);
+        assert!((<Q15 as Sample>::MAX).to_f32() < 1.0);
+    }
+
+    #[test]
+    fn q31_min_max() {
+        assert_eq!(<Q31 as Sample>::MIN, Q31::MIN);
+        assert_eq!(<Q31 as Sample>::MAX, Q31::MAX);
+        assert!((<Q31 as Sample>::MIN).to_f64() <= -1.0 + 1e-9);
+        // Q31::MAX / 2^31 is just below 1.0 — check in f64 to avoid f32 rounding to 1.0
+        assert!((<Q31 as Sample>::MAX).to_f64() > 0.0);
+        assert!((<Q31 as Sample>::MAX).to_f64() < 1.0);
+    }
+
+    #[test]
+    fn bits_snr_formula() {
+        // 6.02 * BITS gives theoretical SNR in dB for a linear PCM type.
+        // 16-bit PCM ≈ 96 dB, 24-bit ≈ 144 dB.
+        let snr_16bit = 6.02 * i16::BITS as f32;
+        assert!((snr_16bit - 96.32).abs() < 0.1);
+    }
 
     // ── zero / one ───────────────────────────────────────────────────────────
 
