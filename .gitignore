@@ -18,6 +18,3 @@ target/criterion/
 *.swo
 *~
 .DS_Store
-
-# Image outputs from examples/benchmarks
-*.png
