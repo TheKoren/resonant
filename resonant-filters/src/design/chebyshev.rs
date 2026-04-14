@@ -10,9 +10,9 @@ use core::f64::consts::PI;
 use num_traits::float::Float as _;
 
 #[cfg(feature = "alloc")]
-use crate::BiquadCoeffs;
-#[cfg(feature = "alloc")]
 use crate::response::FilterError;
+#[cfg(feature = "alloc")]
+use crate::BiquadCoeffs;
 
 #[cfg(feature = "alloc")]
 fn validate_cheby(
