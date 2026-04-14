@@ -3,13 +3,14 @@ extern crate alloc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
+#[cfg(feature = "alloc")]
 use core::f64::consts::PI;
 
 #[allow(unused_imports)]
 use num_traits::float::Float as _;
 
+#[cfg(feature = "alloc")]
 use crate::BiquadCoeffs;
-
 #[cfg(feature = "alloc")]
 use crate::response::FilterError;
 
