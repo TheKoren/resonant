@@ -21,6 +21,8 @@
 /// Chroma features — 12-bin pitch class profiles.
 pub mod chroma;
 pub mod error;
+/// Key detection via Krumhansl-Schmuckler profiles.
+pub mod key;
 pub(crate) mod mel;
 /// Mel-frequency cepstral coefficients (MFCCs).
 pub mod mfcc;
@@ -34,3 +36,4 @@ pub mod spectral;
 pub mod tempo;
 
 pub use error::AnalysisError;
+pub use key::{KeyDetector, KeyEstimate, Mode, PitchClass};
