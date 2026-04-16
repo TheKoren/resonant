@@ -89,7 +89,6 @@ impl Default for LoudnessAnalyser {
     }
 }
 
-
 /// Converts a linear amplitude to dBFS, clamped to [`SILENCE_DB`].
 fn lin_to_db(lin: f32) -> f32 {
     if lin <= 0.0 {
@@ -102,7 +101,6 @@ fn lin_to_db(lin: f32) -> f32 {
         db
     }
 }
-
 
 #[cfg(test)]
 mod tests {

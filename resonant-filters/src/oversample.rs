@@ -102,7 +102,6 @@ impl<const N: usize> Oversample<N> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     extern crate alloc;

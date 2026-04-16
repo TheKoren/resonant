@@ -199,7 +199,6 @@ mod tests {
 
     const FREQS: [f32; 4] = [0.0, 500.0, 1000.0, 1500.0];
 
-
     #[test]
     fn centroid_single_peak() {
         let mags = [0.0, 0.0, 1.0, 0.0];
@@ -234,7 +233,6 @@ mod tests {
         assert!(c.is_some_and(|v| v == 0.0));
     }
 
-
     #[test]
     fn spread_single_peak() {
         let mags = [0.0, 0.0, 1.0, 0.0];
@@ -262,7 +260,6 @@ mod tests {
         let s = spectral_spread(&mags, &FREQS).ok();
         assert!(s.is_some_and(|v| v == 0.0));
     }
-
 
     #[test]
     fn flatness_flat_spectrum() {
@@ -297,7 +294,6 @@ mod tests {
         let f = spectral_flatness(&mags).ok();
         assert!(f.is_some_and(|v| (0.0..=1.0).contains(&v)));
     }
-
 
     #[test]
     fn rolloff_energy_in_first_bin() {

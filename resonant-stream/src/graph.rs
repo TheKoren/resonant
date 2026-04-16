@@ -33,7 +33,6 @@
 
 use crate::{Chunk, DspNode, StreamError};
 
-
 /// Serial composition: `A`'s output becomes `B`'s input.
 ///
 /// Equivalent to `a >> b` via the [`GraphExt`] extension trait.
@@ -53,7 +52,6 @@ impl<A: DspNode, B: DspNode> DspNode for Serial<A, B> {
         self.second.reset();
     }
 }
-
 
 /// Parallel composition: both nodes receive the same input; outputs are summed.
 ///
@@ -96,7 +94,6 @@ impl<A: DspNode, B: DspNode> DspNode for Parallel<A, B> {
     }
 }
 
-
 /// Stack composition: both nodes receive the same input; outputs are concatenated.
 ///
 /// Useful for building multi-band or multi-output processors.
@@ -126,7 +123,6 @@ impl<A: DspNode, B: DspNode> DspNode for Stack<A, B> {
         self.bottom.reset();
     }
 }
-
 
 /// Extension trait that adds graph-composition methods to every [`DspNode`].
 ///
@@ -173,7 +169,6 @@ pub trait GraphExt: DspNode + Sized {
 
 impl<T: DspNode + Sized> GraphExt for T {}
 
-
 /// A `DspNode` that was constructed via graph combinators.
 ///
 /// This is a convenience alias used in `Pipeline::from_graph`.
@@ -181,9 +176,7 @@ impl<T: DspNode + Sized> GraphExt for T {}
 pub trait NodeGraph: DspNode + Send + 'static {}
 impl<T: DspNode + Send + 'static> NodeGraph for T {}
 
-
 extern crate alloc;
-
 
 #[cfg(test)]
 mod tests {
@@ -206,7 +199,6 @@ mod tests {
     fn make_chunk(data: alloc::vec::Vec<f32>) -> Chunk {
         Chunk::new(data, 44100, 1)
     }
-
 
     #[test]
     fn serial_chains_nodes() {
@@ -254,7 +246,6 @@ mod tests {
         g.reset(); // should not panic
     }
 
-
     #[test]
     fn parallel_sums_outputs() {
         // scale(2) & scale(3) on [1.0] → [2.0] + [3.0] = [5.0]
@@ -284,7 +275,6 @@ mod tests {
         g.reset();
     }
 
-
     #[test]
     fn stack_concatenates_outputs() {
         let mut g = scale(2.0).stack(scale(3.0));
@@ -305,7 +295,6 @@ mod tests {
         let mut g = scale(1.0).stack(scale(1.0));
         g.reset();
     }
-
 
     #[test]
     fn graph_ext_serial_method() {

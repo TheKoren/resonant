@@ -307,7 +307,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn hann_on_q15_dc_tapers_correctly() {
         // A DC buffer of Q15::MAX. After hann, endpoints should be near zero

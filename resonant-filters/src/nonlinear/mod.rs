@@ -20,7 +20,6 @@ pub use moog_ladder::MoogLadder;
 pub use saturating_biquad::SaturatingBiquad;
 pub use svf::{StateVariableFilter, SvfOutputs};
 
-
 #[cfg(feature = "alloc")]
 mod response_impls {
     extern crate alloc;
@@ -156,7 +155,6 @@ mod response_impls {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

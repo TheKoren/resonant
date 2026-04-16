@@ -17,7 +17,6 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::signal::{Domain, Signal};
 
-
 impl<D: Domain, const N: usize> Add for Signal<[f32; N], D> {
     type Output = Self;
     /// Element-wise addition. Both signals must have the same domain `D`.
@@ -112,7 +111,6 @@ impl<D: Domain, const N: usize> Signal<[f32; N], D> {
         Signal::new(data)
     }
 }
-
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -235,7 +233,6 @@ mod tests {
     use super::*;
     use crate::signal::{FreqDomain, TimeDomain};
 
-
     #[test]
     fn array_add_same_domain() {
         let a = Signal::<[f32; 4], TimeDomain>::new([1.0, 2.0, 3.0, 4.0]);
@@ -296,7 +293,6 @@ mod tests {
         let c = a + b;
         assert_eq!(c.data(), &[1.5, 1.0]);
     }
-
 
     #[cfg(feature = "alloc")]
     mod vec_tests {
