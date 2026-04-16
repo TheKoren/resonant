@@ -434,7 +434,6 @@ mod tests {
         assert!(buf.is_empty());
     }
 
-    // ── as_slices ──
 
     #[test]
     fn as_slices_no_wraparound() {
@@ -480,7 +479,6 @@ mod tests {
         assert!(b.is_empty());
     }
 
-    // ── drain ──
 
     #[test]
     fn drain_yields_oldest_first() {

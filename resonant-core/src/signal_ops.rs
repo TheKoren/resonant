@@ -17,7 +17,6 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::signal::{Domain, Signal};
 
-// ── Array-backed impls (no_std, no_alloc) ────────────────────────────────────
 
 impl<D: Domain, const N: usize> Add for Signal<[f32; N], D> {
     type Output = Self;
@@ -114,7 +113,6 @@ impl<D: Domain, const N: usize> Signal<[f32; N], D> {
     }
 }
 
-// ── Vec-backed impls (requires alloc) ────────────────────────────────────────
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -237,7 +235,6 @@ mod tests {
     use super::*;
     use crate::signal::{FreqDomain, TimeDomain};
 
-    // ── array-backed ──
 
     #[test]
     fn array_add_same_domain() {
@@ -300,7 +297,6 @@ mod tests {
         assert_eq!(c.data(), &[1.5, 1.0]);
     }
 
-    // ── Vec-backed (alloc) ──
 
     #[cfg(feature = "alloc")]
     mod vec_tests {

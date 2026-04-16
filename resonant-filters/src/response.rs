@@ -16,7 +16,6 @@ use num_traits::float::Float as _;
 
 use crate::{BiquadCoeffs, Fir};
 
-// ── error type ───────────────────────────────────────────────────────────────
 
 /// Errors returned by [`FilterResponseExt::frequency_response`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +35,6 @@ impl core::fmt::Display for FilterError {
     }
 }
 
-// ── FrequencyResponse ────────────────────────────────────────────────────────
 
 /// The computed frequency response of a filter.
 ///
@@ -71,10 +69,18 @@ impl FrequencyResponse {
     }
 }
 
-// ── trait ────────────────────────────────────────────────────────────────────
 
 /// Computes the frequency response of a filter over `n_points` equally-spaced
 /// frequencies from 0 Hz to Nyquist.
+///
+/// ## Nonlinear processors
+///
+/// For nonlinear processors (`MoogLadder`, `SaturatingBiquad`) the response is
+/// measured at `sweep_amplitude = 0.1` (−20 dBFS). The result approximates
+/// small-signal behaviour. At higher drive levels the effective cutoff and
+/// resonance shift due to the nonlinear state; this method does not capture
+/// that dependence. To characterise a nonlinear processor at a specific drive
+/// level, scale the input accordingly before calling `frequency_response`.
 pub trait FilterResponseExt {
     /// Returns the frequency response sampled at `n_points` frequencies.
     ///
@@ -93,7 +99,6 @@ pub trait FilterResponseExt {
     ) -> Result<FrequencyResponse, FilterError>;
 }
 
-// ── BiquadCoeffs impl ────────────────────────────────────────────────────────
 
 impl FilterResponseExt for BiquadCoeffs {
     /// Evaluates H(e^{jω}) analytically on the unit circle.
@@ -168,7 +173,6 @@ impl FilterResponseExt for BiquadCoeffs {
     }
 }
 
-// ── Fir impl ─────────────────────────────────────────────────────────────────
 
 impl FilterResponseExt for Fir {
     /// Computes the FIR frequency response via zero-padded rfft of the
@@ -244,7 +248,6 @@ impl FilterResponseExt for Fir {
     }
 }
 
-// ── tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -254,7 +257,6 @@ mod tests {
     use super::*;
     use crate::design;
 
-    // ── FilterError display ───────────────────────────────────────────────────
 
     #[test]
     fn filter_error_display() {
@@ -262,7 +264,6 @@ mod tests {
         let _ = std::format!("{}", FilterError::InvalidParameter);
     }
 
-    // ── BiquadCoeffs ─────────────────────────────────────────────────────────
 
     #[test]
     fn biquad_invalid_params() {
@@ -402,7 +403,6 @@ mod tests {
         }
     }
 
-    // ── Fir ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn fir_invalid_params() {

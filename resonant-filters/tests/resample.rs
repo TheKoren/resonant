@@ -56,7 +56,6 @@ fn decimate_invalid_inputs() {
     assert!(resample::decimate(&[1.0], 2, 0.0).is_none());
 }
 
-// ── PolyphaseResampler integration tests ─────────────────────────────────────
 
 #[test]
 fn polyphase_upsample_output_length() {

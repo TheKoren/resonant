@@ -20,7 +20,6 @@ pub use moog_ladder::MoogLadder;
 pub use saturating_biquad::SaturatingBiquad;
 pub use svf::{StateVariableFilter, SvfOutputs};
 
-// ── FilterResponseExt for nonlinear types (requires alloc) ───────────────────
 
 #[cfg(feature = "alloc")]
 mod response_impls {
@@ -158,7 +157,6 @@ mod response_impls {
     }
 }
 
-// ── cross-type alloc tests ────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
