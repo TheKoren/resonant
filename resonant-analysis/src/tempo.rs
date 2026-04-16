@@ -26,7 +26,12 @@ use crate::onset::OnsetDetector;
 pub struct TempoEstimate {
     /// Estimated tempo in beats per minute.
     pub bpm: f32,
-    /// Confidence in `[0.0, 1.0]`. Higher means stronger periodicity.
+    /// Pearson autocorrelation coefficient normalised to `[0.0, 1.0]`.
+    ///
+    /// Values below [`TempoEstimator::CONFIDENCE_LOW`] indicate insufficient
+    /// periodicity in the signal — the BPM estimate is unreliable. Values above
+    /// [`TempoEstimator::CONFIDENCE_HIGH`] indicate a strong, consistent pulse
+    /// and the estimate is reliable for most tonal and rhythmic content.
     pub confidence: f32,
 }
 
@@ -51,6 +56,17 @@ pub struct TempoEstimator {
 }
 
 impl TempoEstimator {
+    /// Confidence below this value indicates insufficient periodicity.
+    ///
+    /// The BPM estimate is unreliable when `confidence < CONFIDENCE_LOW`.
+    pub const CONFIDENCE_LOW: f32 = 0.3;
+
+    /// Confidence above this value indicates a solid, reliable estimate.
+    ///
+    /// When `confidence > CONFIDENCE_HIGH` the estimate is suitable for
+    /// beat-synchronised playback, grid snapping, and similar use cases.
+    pub const CONFIDENCE_HIGH: f32 = 0.6;
+
     /// Creates a tempo estimator with default parameters.
     ///
     /// Defaults: BPM range 60–200, onset detector with window 1024 / hop 512.

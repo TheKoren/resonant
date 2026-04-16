@@ -102,7 +102,6 @@ impl<const N: usize> Oversample<N> {
     }
 }
 
-// ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

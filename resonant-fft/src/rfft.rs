@@ -219,7 +219,6 @@ mod tests {
         Complex::new(re, im)
     }
 
-    // ── error cases ──────────────────────────────────────────────────────────
 
     #[test]
     fn rfft_empty_returns_error() {
@@ -261,7 +260,6 @@ mod tests {
         ));
     }
 
-    // ── round-trip ───────────────────────────────────────────────────────────
 
     #[test]
     fn roundtrip_8point() {
@@ -319,7 +317,6 @@ mod tests {
         }
     }
 
-    // ── correctness vs complex FFT ────────────────────────────────────────────
 
     #[test]
     fn rfft_matches_complex_fft_dc_bins() {

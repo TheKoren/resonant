@@ -325,7 +325,6 @@ mod tests {
         assert_eq!(freq.data().len(), 4);
     }
 
-    // ── SignalRfftExt tests ───────────────────────────────────────────────────
 
     #[test]
     fn rfft_ext_returns_half_spectrum() {

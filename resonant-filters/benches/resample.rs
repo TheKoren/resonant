@@ -9,7 +9,6 @@ fn bench_decimate_vs_polyphase(c: &mut Criterion) {
     let input: Vec<f32> = (0..n).map(|i| (i as f32 * 0.1).sin()).collect();
     let mut group = c.benchmark_group("resample");
 
-    // ── Integer decimation (existing) ────────────────────────────────────────
     group.throughput(Throughput::Elements(n as u64));
     group.bench_function("decimate_2x", |b| {
         b.iter(|| decimate(&input, 2, SR).unwrap());
@@ -18,7 +17,6 @@ fn bench_decimate_vs_polyphase(c: &mut Criterion) {
         b.iter(|| decimate(&input, 4, SR).unwrap());
     });
 
-    // ── Polyphase — common ratios ─────────────────────────────────────────────
     group.bench_function("polyphase_2x_down", |b| {
         let mut r = PolyphaseResampler::new(1, 2).unwrap();
         b.iter(|| {

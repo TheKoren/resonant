@@ -33,7 +33,6 @@
 
 use crate::{Chunk, DspNode, StreamError};
 
-// ── Serial ────────────────────────────────────────────────────────────────────
 
 /// Serial composition: `A`'s output becomes `B`'s input.
 ///
@@ -55,7 +54,6 @@ impl<A: DspNode, B: DspNode> DspNode for Serial<A, B> {
     }
 }
 
-// ── Parallel ──────────────────────────────────────────────────────────────────
 
 /// Parallel composition: both nodes receive the same input; outputs are summed.
 ///
@@ -98,7 +96,6 @@ impl<A: DspNode, B: DspNode> DspNode for Parallel<A, B> {
     }
 }
 
-// ── Stack ─────────────────────────────────────────────────────────────────────
 
 /// Stack composition: both nodes receive the same input; outputs are concatenated.
 ///
@@ -130,7 +127,6 @@ impl<A: DspNode, B: DspNode> DspNode for Stack<A, B> {
     }
 }
 
-// ── GraphExt extension trait ──────────────────────────────────────────────────
 
 /// Extension trait that adds graph-composition methods to every [`DspNode`].
 ///
@@ -177,7 +173,6 @@ pub trait GraphExt: DspNode + Sized {
 
 impl<T: DspNode + Sized> GraphExt for T {}
 
-// ── NodeGraph trait alias ─────────────────────────────────────────────────────
 
 /// A `DspNode` that was constructed via graph combinators.
 ///
@@ -186,11 +181,9 @@ impl<T: DspNode + Sized> GraphExt for T {}
 pub trait NodeGraph: DspNode + Send + 'static {}
 impl<T: DspNode + Send + 'static> NodeGraph for T {}
 
-// ── alloc import ─────────────────────────────────────────────────────────────
 
 extern crate alloc;
 
-// ── tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -214,7 +207,6 @@ mod tests {
         Chunk::new(data, 44100, 1)
     }
 
-    // ── Serial ────────────────────────────────────────────────────────────────
 
     #[test]
     fn serial_chains_nodes() {
@@ -262,7 +254,6 @@ mod tests {
         g.reset(); // should not panic
     }
 
-    // ── Parallel ──────────────────────────────────────────────────────────────
 
     #[test]
     fn parallel_sums_outputs() {
@@ -293,7 +284,6 @@ mod tests {
         g.reset();
     }
 
-    // ── Stack ─────────────────────────────────────────────────────────────────
 
     #[test]
     fn stack_concatenates_outputs() {
@@ -316,7 +306,6 @@ mod tests {
         g.reset();
     }
 
-    // ── GraphExt / NodeGraph ──────────────────────────────────────────────────
 
     #[test]
     fn graph_ext_serial_method() {

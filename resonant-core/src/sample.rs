@@ -64,7 +64,6 @@ pub trait Sample: Copy + Clone + PartialOrd + Default {
     }
 }
 
-// ── f32 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for f32 {
     const MIN: Self = f32::MIN;
@@ -92,7 +91,6 @@ impl Sample for f32 {
     }
 }
 
-// ── f64 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for f64 {
     const MIN: Self = f64::MIN;
@@ -120,7 +118,6 @@ impl Sample for f64 {
     }
 }
 
-// ── i16 ──────────────────────────────────────────────────────────────────────
 //
 // Maps [i16::MIN, i16::MAX] → [-1.0, ~1.0) (same convention as Q15).
 
@@ -164,7 +161,6 @@ impl Sample for i16 {
     }
 }
 
-// ── i32 ──────────────────────────────────────────────────────────────────────
 //
 // Maps [i32::MIN, i32::MAX] → [-1.0, ~1.0) (same convention as Q31).
 
@@ -201,7 +197,6 @@ impl Sample for i32 {
     }
 }
 
-// ── Q15 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for Q15 {
     const MIN: Self = Q15::MIN;
@@ -229,7 +224,6 @@ impl Sample for Q15 {
     }
 }
 
-// ── Q31 ──────────────────────────────────────────────────────────────────────
 
 impl Sample for Q31 {
     const MIN: Self = Q31::MIN;
@@ -261,7 +255,6 @@ impl Sample for Q31 {
 mod tests {
     use super::*;
 
-    // ── MIN / MAX / BITS ─────────────────────────────────────────────────────
 
     #[test]
     fn bits_constants() {
@@ -333,7 +326,6 @@ mod tests {
         assert!((snr_16bit - 96.32).abs() < 0.1);
     }
 
-    // ── zero / one ───────────────────────────────────────────────────────────
 
     #[test]
     fn f32_zero_one() {
@@ -371,7 +363,6 @@ mod tests {
         assert_eq!(Q31::one(), Q31::MAX);
     }
 
-    // ── f32 round-trip ───────────────────────────────────────────────────────
 
     #[test]
     fn f32_roundtrip() {
@@ -380,7 +371,6 @@ mod tests {
         assert!((f32::from_f64(f32::to_f64(v)) - v).abs() < 1e-6);
     }
 
-    // ── f64 round-trip ───────────────────────────────────────────────────────
 
     #[test]
     fn f64_roundtrip() {
@@ -388,7 +378,6 @@ mod tests {
         assert!((f64::from_f64(f64::to_f64(v)) - v).abs() < 1e-12);
     }
 
-    // ── i16 ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn i16_to_f32_max() {
@@ -422,7 +411,6 @@ mod tests {
         assert!((rt as i32 - orig as i32).abs() <= 1);
     }
 
-    // ── i32 ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn i32_to_f64_max() {
@@ -446,7 +434,6 @@ mod tests {
         assert_eq!(i32::from_f32(-1.5), i32::MIN);
     }
 
-    // ── Q15 ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn q15_roundtrip_f32() {
@@ -462,7 +449,6 @@ mod tests {
         assert_eq!(orig, rt);
     }
 
-    // ── Q31 ──────────────────────────────────────────────────────────────────
 
     #[test]
     fn q31_roundtrip_f32() {
@@ -479,7 +465,6 @@ mod tests {
         assert_eq!(orig, rt);
     }
 
-    // ── generic algorithm test ───────────────────────────────────────────────
 
     /// Demonstrate that a generic function works across all Sample impls.
     fn scale_by_half<S: Sample>(v: S) -> S {

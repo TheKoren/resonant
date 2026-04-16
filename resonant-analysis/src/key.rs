@@ -9,9 +9,6 @@
 
 use crate::chroma::ChromaVector;
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
 
 /// One of the 12 chromatic pitch classes, from C upward.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,9 +180,6 @@ impl Default for KeyDetector {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Krumhansl-Schmuckler key profiles (1990)
-// ---------------------------------------------------------------------------
 //
 // Each array is indexed from C (0) to B (11) and represents the expected
 // tonal salience of each pitch class relative to a C-rooted key.
@@ -199,9 +193,6 @@ const KS_MINOR: [f32; 12] = [
     6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17,
 ];
 
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
 
 /// Rotates `profile` right by `n` positions so that `profile[0]` (root
 /// salience) lands at chroma bin `n` (the tonic).
@@ -240,9 +231,6 @@ fn pearson(x: &[f32; 12], y: &[f32; 12]) -> f32 {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

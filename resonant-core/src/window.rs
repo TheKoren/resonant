@@ -307,7 +307,6 @@ mod tests {
         }
     }
 
-    // ── Sample-generic tests ─────────────────────────────────────────────────
 
     #[test]
     fn hann_on_q15_dc_tapers_correctly() {
