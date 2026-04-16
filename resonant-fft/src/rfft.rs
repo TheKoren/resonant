@@ -219,7 +219,6 @@ mod tests {
         Complex::new(re, im)
     }
 
-
     #[test]
     fn rfft_empty_returns_error() {
         let mut out = [c(0.0, 0.0); 1];
@@ -259,7 +258,6 @@ mod tests {
             Err(FftError::LengthMismatch { .. })
         ));
     }
-
 
     #[test]
     fn roundtrip_8point() {
@@ -316,7 +314,6 @@ mod tests {
             assert!((a - b).abs() < 1e-3, "mismatch: {a} vs {b}");
         }
     }
-
 
     #[test]
     fn rfft_matches_complex_fft_dc_bins() {

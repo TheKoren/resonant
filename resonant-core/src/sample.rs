@@ -64,7 +64,6 @@ pub trait Sample: Copy + Clone + PartialOrd + Default {
     }
 }
 
-
 impl Sample for f32 {
     const MIN: Self = f32::MIN;
     const MAX: Self = f32::MAX;
@@ -90,7 +89,6 @@ impl Sample for f32 {
         v as f32
     }
 }
-
 
 impl Sample for f64 {
     const MIN: Self = f64::MIN;
@@ -197,7 +195,6 @@ impl Sample for i32 {
     }
 }
 
-
 impl Sample for Q15 {
     const MIN: Self = Q15::MIN;
     const MAX: Self = Q15::MAX;
@@ -223,7 +220,6 @@ impl Sample for Q15 {
         Q15::from_f64(v)
     }
 }
-
 
 impl Sample for Q31 {
     const MIN: Self = Q31::MIN;
@@ -254,7 +250,6 @@ impl Sample for Q31 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn bits_constants() {
@@ -326,7 +321,6 @@ mod tests {
         assert!((snr_16bit - 96.32).abs() < 0.1);
     }
 
-
     #[test]
     fn f32_zero_one() {
         assert_eq!(f32::zero(), 0.0_f32);
@@ -363,7 +357,6 @@ mod tests {
         assert_eq!(Q31::one(), Q31::MAX);
     }
 
-
     #[test]
     fn f32_roundtrip() {
         let v = 0.5_f32;
@@ -371,13 +364,11 @@ mod tests {
         assert!((f32::from_f64(f32::to_f64(v)) - v).abs() < 1e-6);
     }
 
-
     #[test]
     fn f64_roundtrip() {
         let v = 0.123_456_789_f64;
         assert!((f64::from_f64(f64::to_f64(v)) - v).abs() < 1e-12);
     }
-
 
     #[test]
     fn i16_to_f32_max() {
@@ -411,7 +402,6 @@ mod tests {
         assert!((rt as i32 - orig as i32).abs() <= 1);
     }
 
-
     #[test]
     fn i32_to_f64_max() {
         let f = i32::MAX.to_f64();
@@ -434,7 +424,6 @@ mod tests {
         assert_eq!(i32::from_f32(-1.5), i32::MIN);
     }
 
-
     #[test]
     fn q15_roundtrip_f32() {
         let orig = Q15::from_f32(0.5);
@@ -448,7 +437,6 @@ mod tests {
         let rt = Q15::from_f64(orig.to_f64());
         assert_eq!(orig, rt);
     }
-
 
     #[test]
     fn q31_roundtrip_f32() {
@@ -464,7 +452,6 @@ mod tests {
         let rt = Q31::from_f64(orig.to_f64());
         assert_eq!(orig, rt);
     }
-
 
     /// Demonstrate that a generic function works across all Sample impls.
     fn scale_by_half<S: Sample>(v: S) -> S {

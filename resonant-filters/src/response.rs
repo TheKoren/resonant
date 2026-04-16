@@ -16,7 +16,6 @@ use num_traits::float::Float as _;
 
 use crate::{BiquadCoeffs, Fir};
 
-
 /// Errors returned by [`FilterResponseExt::frequency_response`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterError {
@@ -34,7 +33,6 @@ impl core::fmt::Display for FilterError {
         }
     }
 }
-
 
 /// The computed frequency response of a filter.
 ///
@@ -69,7 +67,6 @@ impl FrequencyResponse {
     }
 }
 
-
 /// Computes the frequency response of a filter over `n_points` equally-spaced
 /// frequencies from 0 Hz to Nyquist.
 ///
@@ -98,7 +95,6 @@ pub trait FilterResponseExt {
         sample_rate: f32,
     ) -> Result<FrequencyResponse, FilterError>;
 }
-
 
 impl FilterResponseExt for BiquadCoeffs {
     /// Evaluates H(e^{jω}) analytically on the unit circle.
@@ -172,7 +168,6 @@ impl FilterResponseExt for BiquadCoeffs {
         })
     }
 }
-
 
 impl FilterResponseExt for Fir {
     /// Computes the FIR frequency response via zero-padded rfft of the
@@ -248,7 +243,6 @@ impl FilterResponseExt for Fir {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     extern crate std;
@@ -257,13 +251,11 @@ mod tests {
     use super::*;
     use crate::design;
 
-
     #[test]
     fn filter_error_display() {
         let _ = std::format!("{}", FilterError::Empty);
         let _ = std::format!("{}", FilterError::InvalidParameter);
     }
-
 
     #[test]
     fn biquad_invalid_params() {
@@ -402,7 +394,6 @@ mod tests {
             assert!(d >= -120.0, "dB floor violated: {d}");
         }
     }
-
 
     #[test]
     fn fir_invalid_params() {

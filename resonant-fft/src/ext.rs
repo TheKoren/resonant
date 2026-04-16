@@ -325,7 +325,6 @@ mod tests {
         assert_eq!(freq.data().len(), 4);
     }
 
-
     #[test]
     fn rfft_ext_returns_half_spectrum() {
         let sig = Signal::from_samples(std::vec![1.0_f32, 0.0, -1.0, 0.0]);

@@ -176,7 +176,6 @@ impl ChromaExtractor {
     }
 }
 
-
 /// Maps a frequency in Hz to a pitch class index (0 = C, 9 = A, etc.).
 ///
 /// Returns `None` for frequencies below C1 (~32.7 Hz) or non-positive.

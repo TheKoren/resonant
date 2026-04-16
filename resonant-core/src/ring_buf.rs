@@ -434,7 +434,6 @@ mod tests {
         assert!(buf.is_empty());
     }
 
-
     #[test]
     fn as_slices_no_wraparound() {
         let mut buf = RingBuf::<i32, 4>::new();
@@ -478,7 +477,6 @@ mod tests {
         assert_eq!(a, &[7, 8, 9]);
         assert!(b.is_empty());
     }
-
 
     #[test]
     fn drain_yields_oldest_first() {
