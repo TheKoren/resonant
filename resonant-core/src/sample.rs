@@ -253,8 +253,8 @@ mod tests {
 
     #[test]
     fn bits_constants() {
-        assert_eq!(f32::BITS, 32);
-        assert_eq!(f64::BITS, 64);
+        assert_eq!(<f32 as Sample>::BITS, 32);
+        assert_eq!(<f64 as Sample>::BITS, 64);
         assert_eq!(i16::BITS, 16);
         assert_eq!(i32::BITS, 32);
         assert_eq!(Q15::BITS, 16);
