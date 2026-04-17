@@ -25,6 +25,8 @@ pub mod error;
 pub mod key;
 /// Loudness analysis: RMS, peak, and crest factor.
 pub mod loudness;
+/// LUFS measurement per ITU-R BS.1770-4.
+pub mod lufs;
 pub(crate) mod mel;
 /// Mel-frequency cepstral coefficients (MFCCs).
 pub mod mfcc;
@@ -40,3 +42,4 @@ pub mod tempo;
 pub use error::AnalysisError;
 pub use key::{KeyDetector, KeyEstimate, Mode, PitchClass};
 pub use loudness::LoudnessAnalyser;
+pub use lufs::LufsAnalyser;
