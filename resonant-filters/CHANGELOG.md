@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-19
+
+### Added
+- Opt-in `serde` feature: `BiquadCoeffs`, `BiquadState`, `FrequencyResponse`, and
+  `FilterError` derive `Serialize`/`Deserialize` when `features = ["serde"]`
+
 ## [0.2.0] - 2026-04-11
 
 ### Added

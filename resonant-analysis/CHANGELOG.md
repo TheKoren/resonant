@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-19
+
+### Added
+- `KeyDetector` and associated types (`KeyEstimate`, `PitchClass`, `Mode`) — Krumhansl-Schmuckler
+  key estimation from chroma frames; re-exported from crate root
+- `LoudnessAnalyser` — RMS, peak, dBFS, and crest factor for mono buffers; re-exported from crate root
+- `LufsAnalyser` — ITU-R BS.1770-4 integrated, momentary, and short-term loudness with 4× true-peak;
+  K-weighting coefficients baked in for 44100/48000 Hz; re-exported from crate root
+- Tempo confidence constants: `TempoEstimator::CONFIDENCE_LOW` (0.3) and `CONFIDENCE_HIGH` (0.6)
+- Opt-in `serde` feature: `PitchEstimate`, `Onset`, `TempoEstimate`, `MfccFrame`, `ChromaVector`,
+  `KeyEstimate`, `PitchClass`, `Mode`, and `AnalysisError` (serialize-only) derive serde traits
+  when `features = ["serde"]`
+
 ## [0.2.0] - 2026-04-11
 
 ### Changed
