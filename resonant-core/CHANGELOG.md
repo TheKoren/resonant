@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-19
+
+### Added
+- Opt-in `serde` feature: `Q15` and `Q31` now derive `Serialize`/`Deserialize`
+  when `features = ["serde"]`; both types use `#[serde(transparent)]` so they
+  serialise as their raw integer value
+
 ## [0.2.0] - 2026-04-11
 
 ### Added

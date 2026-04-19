@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-19
+
+### Changed
+- Inter-crate dependencies bumped to 0.3.0
+
 ## [0.2.0] - 2026-04-11
 
 ### Added

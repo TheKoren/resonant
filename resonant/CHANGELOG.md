@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-19
+
+### Added
+- `AnalysisResult` — high-level analysis summary: `bpm`, `bpm_confidence`, `key`, `onsets`,
+  `loudness_lufs`, `peak_db`, `rms_db`
+- `AudioFile::analyse()` — single-pass: tempo, onset timestamps, key (Krumhansl-Schmuckler),
+  integrated LUFS loudness, peak and RMS level
+- `AudioFile::with_analysis_window()` — override STFT window size for `analyse()`
+- Re-exports: `KeyEstimate`, `PitchClass`, `Mode` from `resonant-analysis`
+- Opt-in `serde` feature: `AnalysisResult` and `FrequencyBin` derive `Serialize`/`Deserialize`;
+  `AudioError` derives `Serialize` (no round-trip — `Io` variant serialises as display string)
+- All inter-crate dependencies bumped to 0.3.0
+
 ## [0.2.0] - 2026-04-11
 
 ### Added

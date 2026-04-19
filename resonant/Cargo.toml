@@ -1,7 +1,7 @@
 [package]
 name = "resonant"
 description = "Ergonomic audio DSP for Rust — FFT, filters, analysis in one line of code"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -10,11 +10,11 @@ categories = ["multimedia::audio"]
 keywords = ["dsp", "audio", "fft", "signal", "analysis"]
 
 [dependencies]
-resonant-core = { version = "0.2.0", path = "../resonant-core" }
-resonant-fft = { version = "0.2.0", path = "../resonant-fft" }
-resonant-filters = { version = "0.2.0", path = "../resonant-filters" }
-resonant-stream = { version = "0.2.0", path = "../resonant-stream" }
-resonant-analysis = { version = "0.2.0", path = "../resonant-analysis" }
+resonant-core = { version = "0.3.0", path = "../resonant-core" }
+resonant-fft = { version = "0.3.0", path = "../resonant-fft" }
+resonant-filters = { version = "0.3.0", path = "../resonant-filters" }
+resonant-stream = { version = "0.3.0", path = "../resonant-stream" }
+resonant-analysis = { version = "0.3.0", path = "../resonant-analysis" }
 symphonia = { version = "0.5", default-features = false, features = [
     "wav", "pcm", "mp3", "flac", "ogg", "vorbis",
 ] }
