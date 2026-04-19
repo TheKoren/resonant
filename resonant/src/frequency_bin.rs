@@ -5,6 +5,7 @@
 /// Produced by [`AudioFile::fft()`](crate::AudioFile::fft). Each bin
 /// represents the energy at a specific frequency.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FrequencyBin {
     /// Centre frequency of this bin in Hz.
     pub frequency_hz: f32,
@@ -59,5 +60,20 @@ mod tests {
         };
         // Should not panic; returns a very negative value
         assert!(bin.db() < -300.0);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn frequency_bin_serde_roundtrip() {
+        let bin = FrequencyBin {
+            frequency_hz: 440.0,
+            magnitude: 0.5,
+            phase: 1.2,
+        };
+        let json =
+            serde_json::to_string(&bin).unwrap_or_else(|e| panic!("serialize FrequencyBin: {e}"));
+        let back: FrequencyBin =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize FrequencyBin: {e}"));
+        assert_eq!(bin, back);
     }
 }

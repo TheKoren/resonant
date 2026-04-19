@@ -76,6 +76,7 @@ pub use rfft::{irfft, rfft};
 
 /// Errors that can occur during FFT computation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FftError {
     /// Input length is not a power of two (radix-2), or does not match the
     /// planned length (rustfft plan).
@@ -99,6 +100,30 @@ impl core::fmt::Display for FftError {
             Self::LengthMismatch { input, output } => {
                 write!(f, "buffer length mismatch: input {input}, output {output}")
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn fft_error_serde_roundtrip() {
+        for e in [
+            FftError::Empty,
+            FftError::NotPowerOfTwo(3),
+            FftError::LengthMismatch {
+                input: 4,
+                output: 8,
+            },
+        ] {
+            let json =
+                serde_json::to_string(&e).unwrap_or_else(|err| panic!("serialize FftError: {err}"));
+            let back: FftError = serde_json::from_str(&json)
+                .unwrap_or_else(|err| panic!("deserialize FftError: {err}"));
+            assert_eq!(e, back);
         }
     }
 }

@@ -24,6 +24,7 @@ use crate::error::AnalysisError;
 /// assert!(est.frequency_hz.is_some());
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PitchEstimate {
     /// Estimated fundamental frequency in Hz, or `None` if no clear pitch.
     pub frequency_hz: Option<f32>,
@@ -395,5 +396,33 @@ mod tests {
         let cmnd = [0.5, 0.1, 0.3];
         let result = parabolic_interpolation(&cmnd, 0);
         assert_eq!(result, 0.0); // boundary, no interpolation
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn pitch_estimate_serde_roundtrip() {
+        let p = PitchEstimate {
+            frequency_hz: Some(440.0),
+            confidence: 0.95,
+        };
+        let json =
+            serde_json::to_string(&p).unwrap_or_else(|e| panic!("serialize PitchEstimate: {e}"));
+        let back: PitchEstimate = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("deserialize PitchEstimate: {e}"));
+        assert_eq!(p, back);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn pitch_estimate_none_serde_roundtrip() {
+        let p = PitchEstimate {
+            frequency_hz: None,
+            confidence: 0.0,
+        };
+        let json = serde_json::to_string(&p)
+            .unwrap_or_else(|e| panic!("serialize PitchEstimate(None): {e}"));
+        let back: PitchEstimate = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("deserialize PitchEstimate(None): {e}"));
+        assert_eq!(p, back);
     }
 }

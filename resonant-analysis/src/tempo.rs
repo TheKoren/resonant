@@ -23,6 +23,7 @@ use crate::onset::OnsetDetector;
 /// assert!(est.bpm > 0.0);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TempoEstimate {
     /// Estimated tempo in beats per minute.
     pub bpm: f32,
@@ -357,7 +358,19 @@ mod tests {
         let _ = e;
     }
 
-    // --- internal helper tests ---
+    #[cfg(feature = "serde")]
+    #[test]
+    fn tempo_estimate_serde_roundtrip() {
+        let t = TempoEstimate {
+            bpm: 120.0,
+            confidence: 0.85,
+        };
+        let json =
+            serde_json::to_string(&t).unwrap_or_else(|e| panic!("serialize TempoEstimate: {e}"));
+        let back: TempoEstimate = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("deserialize TempoEstimate: {e}"));
+        assert_eq!(t, back);
+    }
 
     #[test]
     fn autocorrelation_of_constant() {

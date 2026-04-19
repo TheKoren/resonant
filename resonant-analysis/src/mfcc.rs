@@ -30,6 +30,7 @@ use crate::mel::{apply_mel_filterbank, build_mel_filterbank, log_mel_energy};
 /// assert_eq!(frame.coefficients.len(), 3);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MfccFrame {
     /// The MFCC coefficients for this frame.
     pub coefficients: Vec<f32>,
@@ -410,5 +411,18 @@ mod tests {
         for frame in &frames {
             assert_eq!(frame.coefficients.len(), 20);
         }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn mfcc_frame_serde_roundtrip() {
+        let frame = MfccFrame {
+            coefficients: vec![1.0, -0.5, 0.3, 0.0],
+        };
+        let json =
+            serde_json::to_string(&frame).unwrap_or_else(|e| panic!("serialize MfccFrame: {e}"));
+        let back: MfccFrame =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize MfccFrame: {e}"));
+        assert_eq!(frame, back);
     }
 }

@@ -11,6 +11,7 @@
 ///
 /// Normalised so the denominator leading coefficient (a0) is 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BiquadCoeffs {
     /// Numerator coefficients.
     pub b0: f32,
@@ -26,6 +27,7 @@ pub struct BiquadCoeffs {
 
 /// Internal delay state for a biquad section.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BiquadState {
     /// First delay element.
     #[doc(hidden)]
@@ -272,5 +274,33 @@ mod tests {
             prev = y;
         }
         assert!(prev < 1e-3);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn biquad_coeffs_serde_roundtrip() {
+        let c = BiquadCoeffs {
+            b0: 1.0,
+            b1: -2.0,
+            b2: 1.0,
+            a1: -1.9,
+            a2: 0.9,
+        };
+        let json =
+            serde_json::to_string(&c).unwrap_or_else(|e| panic!("serialize BiquadCoeffs: {e}"));
+        let back: BiquadCoeffs =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize BiquadCoeffs: {e}"));
+        assert_eq!(c, back);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn biquad_state_serde_roundtrip() {
+        let s = BiquadState { s1: 0.1, s2: -0.2 };
+        let json =
+            serde_json::to_string(&s).unwrap_or_else(|e| panic!("serialize BiquadState: {e}"));
+        let back: BiquadState =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize BiquadState: {e}"));
+        assert_eq!(s, back);
     }
 }

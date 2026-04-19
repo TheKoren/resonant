@@ -18,6 +18,7 @@ use crate::{BiquadCoeffs, Fir};
 
 /// Errors returned by [`FilterResponseExt::frequency_response`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FilterError {
     /// The filter has no taps or coefficients (e.g. empty FIR).
     Empty,
@@ -39,6 +40,7 @@ impl core::fmt::Display for FilterError {
 /// All three vectors have the same length (`n_points`).
 /// Frequencies run from 0 Hz (DC) to `sample_rate / 2` (Nyquist), inclusive.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FrequencyResponse {
     /// Frequency axis in Hz.
     pub frequencies: Vec<f32>,
@@ -467,5 +469,32 @@ mod tests {
             "Nyquist not attenuated enough: {} dB",
             db[db.len() - 1]
         );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn filter_error_serde_roundtrip() {
+        for e in [FilterError::Empty, FilterError::InvalidParameter] {
+            let json = serde_json::to_string(&e)
+                .unwrap_or_else(|err| panic!("serialize FilterError: {err}"));
+            let back: FilterError = serde_json::from_str(&json)
+                .unwrap_or_else(|err| panic!("deserialize FilterError: {err}"));
+            assert_eq!(e, back);
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn frequency_response_serde_roundtrip() {
+        let fr = FrequencyResponse {
+            frequencies: vec![0.0, 500.0, 1000.0],
+            magnitudes: vec![1.0, 0.707, 0.5],
+            phases: vec![0.0, -0.5, -1.0],
+        };
+        let json = serde_json::to_string(&fr)
+            .unwrap_or_else(|e| panic!("serialize FrequencyResponse: {e}"));
+        let back: FrequencyResponse = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("deserialize FrequencyResponse: {e}"));
+        assert_eq!(fr, back);
     }
 }

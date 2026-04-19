@@ -11,6 +11,7 @@ use crate::chroma::ChromaVector;
 
 /// One of the 12 chromatic pitch classes, from C upward.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PitchClass {
     /// C
     C,
@@ -78,6 +79,7 @@ impl PitchClass {
 
 /// Musical mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Mode {
     /// Major scale.
     Major,
@@ -87,6 +89,7 @@ pub enum Mode {
 
 /// Result of a key classification.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyEstimate {
     /// Detected tonic pitch class.
     pub tonic: PitchClass,
@@ -350,5 +353,46 @@ mod tests {
     fn pearson_flat_array_is_zero() {
         let flat = [1.0_f32; 12];
         assert_eq!(pearson(&KS_MAJOR, &flat), 0.0);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn key_estimate_serde_roundtrip() {
+        let k = KeyEstimate {
+            tonic: PitchClass::A,
+            mode: Mode::Major,
+            confidence: 0.92,
+        };
+        let json =
+            serde_json::to_string(&k).unwrap_or_else(|e| panic!("serialize KeyEstimate: {e}"));
+        let back: KeyEstimate =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize KeyEstimate: {e}"));
+        assert_eq!(back.tonic, k.tonic);
+        assert_eq!(back.mode, k.mode);
+        assert!((back.confidence - k.confidence).abs() < 1e-6);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn pitch_class_serde_roundtrip() {
+        for pc in [PitchClass::C, PitchClass::Fs, PitchClass::B] {
+            let json =
+                serde_json::to_string(&pc).unwrap_or_else(|e| panic!("serialize PitchClass: {e}"));
+            let back: PitchClass = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("deserialize PitchClass: {e}"));
+            assert_eq!(pc, back);
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn mode_serde_roundtrip() {
+        for mode in [Mode::Major, Mode::Minor] {
+            let json =
+                serde_json::to_string(&mode).unwrap_or_else(|e| panic!("serialize Mode: {e}"));
+            let back: Mode =
+                serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize Mode: {e}"));
+            assert_eq!(mode, back);
+        }
     }
 }

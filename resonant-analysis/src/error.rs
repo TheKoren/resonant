@@ -3,7 +3,12 @@
 use core::fmt;
 
 /// Errors that can occur during audio analysis.
+///
+/// Implements [`serde::Serialize`] (but not `Deserialize`) when the `serde`
+/// feature is enabled. The `InvalidParameter` variant stores `&'static str`
+/// fields which cannot be reconstructed from a deserialised `String`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum AnalysisError {
     /// The input buffer was empty.
     EmptyInput,
@@ -78,5 +83,23 @@ mod tests {
     fn clone_and_eq() {
         let e = AnalysisError::EmptyInput;
         assert_eq!(e.clone(), e);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn analysis_error_serialize_to_json() {
+        let cases = [
+            AnalysisError::EmptyInput,
+            AnalysisError::InvalidParameter {
+                name: "window_size",
+                reason: "must be positive",
+            },
+            AnalysisError::Fft(resonant_fft::FftError::Empty),
+        ];
+        for e in &cases {
+            let json = serde_json::to_string(e)
+                .unwrap_or_else(|err| panic!("serialize AnalysisError: {err}"));
+            assert!(!json.is_empty());
+        }
     }
 }
