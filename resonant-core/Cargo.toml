@@ -12,12 +12,15 @@ keywords = ["dsp", "signal", "no-std", "audio", "fft"]
 [features]
 default = []
 alloc = []
+serde = ["dep:serde"]
 
 [dependencies]
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+serde_json = "1"
 
 [[bench]]
 name = "window"

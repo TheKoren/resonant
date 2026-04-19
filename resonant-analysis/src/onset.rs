@@ -27,6 +27,7 @@ use crate::error::AnalysisError;
 /// assert_eq!(o.time_secs, 0.5);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Onset {
     /// Sample index of the onset.
     pub sample_index: usize,
@@ -449,5 +450,19 @@ mod tests {
     #[test]
     fn local_mad_uniform() {
         assert_eq!(local_mad(&[5.0, 5.0, 5.0], 5.0), 0.0);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn onset_serde_roundtrip() {
+        let o = Onset {
+            sample_index: 22050,
+            time_secs: 0.5,
+            strength: 1.2,
+        };
+        let json = serde_json::to_string(&o).unwrap_or_else(|e| panic!("serialize Onset: {e}"));
+        let back: Onset =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize Onset: {e}"));
+        assert_eq!(o, back);
     }
 }

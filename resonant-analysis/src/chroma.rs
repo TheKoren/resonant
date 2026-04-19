@@ -37,6 +37,7 @@ pub const PITCH_CLASS_NAMES: [&str; 12] = [
 /// assert_eq!(cv.bins.len(), 12);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChromaVector {
     /// Energy in each of the 12 pitch classes.
     pub bins: [f32; 12],
@@ -422,5 +423,18 @@ mod tests {
                 assert!(b.is_finite(), "non-finite chroma bin: {b}");
             }
         }
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn chroma_vector_serde_roundtrip() {
+        let mut cv = ChromaVector { bins: [0.0; 12] };
+        cv.bins[9] = 1.0; // A
+        cv.bins[1] = 0.8; // C#
+        let json =
+            serde_json::to_string(&cv).unwrap_or_else(|e| panic!("serialize ChromaVector: {e}"));
+        let back: ChromaVector =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize ChromaVector: {e}"));
+        assert_eq!(cv, back);
     }
 }

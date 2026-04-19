@@ -2,10 +2,23 @@
 
 use std::fmt;
 
+#[cfg(feature = "serde")]
+mod io_error_serde {
+    use serde::Serializer;
+    pub fn serialize<S: Serializer>(e: &std::io::Error, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&e.to_string())
+    }
+}
+
 /// Errors returned by the resonant facade.
+///
+/// Implements [`serde::Serialize`] (but not `Deserialize`) when the `serde`
+/// feature is enabled. The `Io` variant serialises as the error's `Display` string.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub enum AudioError {
     /// File could not be opened or read.
+    #[cfg_attr(feature = "serde", serde(serialize_with = "io_error_serde::serialize"))]
     Io(std::io::Error),
     /// The audio format or codec is not supported.
     UnsupportedFormat(String),
@@ -60,6 +73,31 @@ impl From<resonant_fft::FftError> for AudioError {
 impl From<resonant_analysis::AnalysisError> for AudioError {
     fn from(e: resonant_analysis::AnalysisError) -> Self {
         Self::Analysis(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn audio_error_serialize_to_json() {
+        let cases: &[AudioError] = &[
+            AudioError::NoTrack,
+            AudioError::UnsupportedFormat("mp4".to_string()),
+            AudioError::Decode("corrupt frame".to_string()),
+            AudioError::InvalidParameter("window size must be power of two".to_string()),
+            AudioError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "file.wav",
+            )),
+        ];
+        for e in cases {
+            let json = serde_json::to_string(e)
+                .unwrap_or_else(|err| panic!("serialize AudioError: {err}"));
+            assert!(!json.is_empty());
+        }
     }
 }
 

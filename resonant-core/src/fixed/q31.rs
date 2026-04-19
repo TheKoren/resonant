@@ -18,6 +18,8 @@
 /// assert!((c.to_f32() - 0.75).abs() < 0.0001);
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Q31(i32);
 
 /// Scale factor: 2^31 = 2147483648.
@@ -359,5 +361,23 @@ mod tests {
         let a = Q31::from_f64(0.000_001);
         let b = Q31::from_f64(0.000_002);
         assert_ne!(a, b);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn q31_serde_roundtrip() {
+        let q = Q31::from_f32(0.25);
+        let json = serde_json::to_string(&q).unwrap_or_else(|e| panic!("serialize Q31: {e}"));
+        let back: Q31 =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize Q31: {e}"));
+        assert_eq!(q, back);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn q31_serde_transparent() {
+        let q = Q31::from_raw(-32768);
+        let json = serde_json::to_string(&q).unwrap_or_else(|e| panic!("serialize Q31: {e}"));
+        assert_eq!(json, "-32768");
     }
 }

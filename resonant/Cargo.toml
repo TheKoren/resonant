@@ -18,9 +18,11 @@ resonant-analysis = { version = "0.2.0", path = "../resonant-analysis" }
 symphonia = { version = "0.5", default-features = false, features = [
     "wav", "pcm", "mp3", "flac", "ogg", "vorbis",
 ] }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+serde_json = "1"
 
 [[bench]]
 name = "facade"
@@ -28,6 +30,7 @@ harness = false
 
 [features]
 default = []
+serde = ["dep:serde", "resonant-fft/serde", "resonant-analysis/serde"]
 
 [package.metadata.docs.rs]
 all-features = true

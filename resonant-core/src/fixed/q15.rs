@@ -17,6 +17,8 @@
 /// assert!((c.to_f32() - 0.75).abs() < 0.001);
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Q15(i16);
 
 /// Scale factor: 2^15 = 32768.
@@ -361,5 +363,23 @@ mod tests {
         let c = Q15::from_f32(0.5);
         assert!(a < b);
         assert!(b < c);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn q15_serde_roundtrip() {
+        let q = Q15::from_f32(0.5);
+        let json = serde_json::to_string(&q).unwrap_or_else(|e| panic!("serialize Q15: {e}"));
+        let back: Q15 =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("deserialize Q15: {e}"));
+        assert_eq!(q, back);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn q15_serde_transparent() {
+        let q = Q15::from_raw(1000);
+        let json = serde_json::to_string(&q).unwrap_or_else(|e| panic!("serialize Q15: {e}"));
+        assert_eq!(json, "1000");
     }
 }
