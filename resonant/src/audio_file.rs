@@ -13,48 +13,29 @@
 
 use std::path::Path;
 
-use resonant_analysis::chroma::{ChromaExtractor, ChromaVector};
-use resonant_analysis::mfcc::{MfccExtractor, MfccFrame};
-use resonant_analysis::onset::{Onset, OnsetDetector};
-use resonant_analysis::pitch::{PitchEstimate, YinEstimator};
-use resonant_analysis::spectral;
-use resonant_analysis::tempo::{TempoEstimate, TempoEstimator};
+use resonant_analysis::chroma::ChromaExtractor;
+use resonant_analysis::key::KeyDetector;
+use resonant_analysis::loudness::LoudnessAnalyser;
+use resonant_analysis::lufs::LufsAnalyser;
+use resonant_analysis::onset::OnsetDetector;
+use resonant_analysis::tempo::TempoEstimator;
 use resonant_core::signal::Signal;
 use resonant_core::window;
 use resonant_fft::{SignalFftExt, SignalFreqExt};
 
+use crate::analysis::AnalysisResult;
+
 use crate::decode::{decode_path, downmix_to_mono};
 use crate::error::AudioError;
 use crate::frequency_bin::FrequencyBin;
-
-/// Result of running all analysis algorithms on an audio file.
-///
-/// Returned by [`AudioFile::analyse()`].
-#[derive(Debug, Clone)]
-pub struct AnalysisResult {
-    /// Estimated tempo in BPM with confidence.
-    pub tempo: TempoEstimate,
-    /// Detected onsets (note/beat boundaries).
-    pub onsets: Vec<Onset>,
-    /// Pitch estimate (fundamental frequency) of the full signal.
-    pub pitch: PitchEstimate,
-    /// MFCC frames (one per STFT frame).
-    pub mfcc: Vec<MfccFrame>,
-    /// Chroma vectors (one per STFT frame).
-    pub chroma: Vec<ChromaVector>,
-    /// Spectral centroid of the full-signal magnitude spectrum.
-    pub spectral_centroid: f32,
-    /// Spectral flatness of the full-signal magnitude spectrum.
-    pub spectral_flatness: f32,
-}
 
 /// Type alias for window functions accepted by the builder.
 ///
 /// A window function takes a mutable slice and multiplies in-place.
 pub type WindowFn = fn(&mut [f32]);
 
-/// Analysis parameters used by [`AudioFile::fft()`] and
-/// [`AudioFile::fft_stream()`].
+/// Analysis parameters used by [`AudioFile::fft()`], [`AudioFile::fft_stream()`],
+/// and [`AudioFile::analyse()`].
 #[derive(Debug, Clone)]
 struct AnalysisConfig {
     /// FFT window size in samples. `None` means use the full signal length.
@@ -65,6 +46,8 @@ struct AnalysisConfig {
     window_fn: WindowFn,
     /// Whether to return magnitudes in dB.
     db_scale: bool,
+    /// STFT window size used by `analyse()`. `None` uses each detector's default.
+    analysis_window_size: Option<usize>,
 }
 
 impl Default for AnalysisConfig {
@@ -74,6 +57,7 @@ impl Default for AnalysisConfig {
             overlap: 0.5,
             window_fn: window::hann,
             db_scale: false,
+            analysis_window_size: None,
         }
     }
 }
@@ -230,6 +214,17 @@ impl AudioFile {
         self
     }
 
+    /// Override the STFT window size used by [`analyse()`](Self::analyse).
+    ///
+    /// Must be a power of two (e.g. 1024, 2048, 4096). When not set, each
+    /// detector uses its own default. Larger windows improve frequency
+    /// resolution at the cost of temporal resolution.
+    #[must_use]
+    pub fn with_analysis_window(mut self, size: usize) -> Self {
+        self.config.analysis_window_size = Some(size);
+        self
+    }
+
     // --- Analysis methods ---
 
     /// Compute the FFT of the mono signal, returning labelled frequency bins.
@@ -325,40 +320,61 @@ impl AudioFile {
 
     /// Run all analysis algorithms on the mono signal at once.
     ///
-    /// Returns an [`AnalysisResult`] containing tempo, onsets, pitch, MFCCs,
-    /// chroma features, and spectral descriptors.
+    /// Computes tempo, onsets, key, loudness, and level in a single pass.
+    /// Use [`with_analysis_window`](Self::with_analysis_window) to override the
+    /// STFT window size for onset and chroma extraction.
     ///
     /// # Errors
     ///
-    /// Returns [`AudioError::Analysis`] if any analysis step fails (e.g.
-    /// empty input).
+    /// Returns [`AudioError::Analysis`] if any analysis step fails.
     pub fn analyse(&self) -> Result<AnalysisResult, AudioError> {
         let mono = self.samples_mono();
         let sr = self.sample_rate as f32;
+        let win = self.config.analysis_window_size;
 
+        // Tempo
         let tempo = TempoEstimator::new(sr).estimate(mono)?;
-        let onsets = OnsetDetector::new(sr).detect(mono)?;
-        let pitch = YinEstimator::new(sr).estimate(mono)?;
-        let mfcc = MfccExtractor::new(sr).extract(mono)?;
-        let chroma = ChromaExtractor::new(sr).extract(mono)?;
+        let bpm = if tempo.confidence >= TempoEstimator::CONFIDENCE_LOW {
+            Some(tempo.bpm)
+        } else {
+            None
+        };
 
-        // Spectral features from the full-signal FFT magnitude
-        let fft_bins = self.fft()?;
-        let magnitudes: Vec<f32> = fft_bins.iter().map(|b| b.magnitude).collect();
-        let frequencies: Vec<f32> = fft_bins.iter().map(|b| b.frequency_hz).collect();
+        // Onsets → timestamps in seconds
+        let mut od = OnsetDetector::new(sr);
+        if let Some(w) = win {
+            od = od.with_window_size(w);
+        }
+        let onsets: Vec<f32> = od.detect(mono)?.into_iter().map(|o| o.time_secs).collect();
 
-        let spectral_centroid =
-            spectral::spectral_centroid(&magnitudes, &frequencies).unwrap_or(0.0);
-        let spectral_flatness = spectral::spectral_flatness(&magnitudes).unwrap_or(0.0);
+        // Key via chroma → Krumhansl-Schmuckler
+        let mut ce = ChromaExtractor::new(sr);
+        if let Some(w) = win {
+            ce = ce.with_window_size(w);
+        }
+        let chroma = ce.extract(mono)?;
+        let key = KeyDetector::new()
+            .detect(&chroma)
+            .filter(|k| k.confidence > 0.3);
+
+        // Integrated loudness — silently None for unsupported rates or short signals
+        let loudness_lufs = LufsAnalyser::new(sr)
+            .ok()
+            .and_then(|mut a| a.integrated_loudness(mono).ok());
+
+        // Level
+        let la = LoudnessAnalyser::new();
+        let peak_db = la.peak_db(mono);
+        let rms_db = la.rms_db(mono);
 
         Ok(AnalysisResult {
-            tempo,
+            bpm,
+            bpm_confidence: tempo.confidence,
+            key,
             onsets,
-            pitch,
-            mfcc,
-            chroma,
-            spectral_centroid,
-            spectral_flatness,
+            loudness_lufs,
+            peak_db,
+            rms_db,
         })
     }
 }
@@ -794,25 +810,33 @@ mod tests {
         let r = result.ok();
         let r = r.as_ref();
 
-        // Tempo should be detected
-        assert!(r.map_or(false, |r| r.tempo.bpm > 0.0));
+        // bpm_confidence in [0, 1]
+        assert!(r.map_or(false, |r| r.bpm_confidence >= 0.0
+            && r.bpm_confidence <= 1.0));
 
-        // Onsets should be detected
-        assert!(r.map_or(false, |r| !r.onsets.is_empty()));
+        // Peak near 0 dBFS — each burst is a full-scale sine
+        assert!(r.map_or(false, |r| r.peak_db > -3.0));
 
-        // MFCCs should have frames with 13 coefficients
-        assert!(r.map_or(false, |r| !r.mfcc.is_empty()));
-        assert!(r.map_or(false, |r| r.mfcc[0].coefficients.len() == 13));
+        // RMS is well below peak because the signal is sparse click bursts
+        assert!(r.map_or(false, |r| r.rms_db > -120.0 && r.rms_db < r.peak_db));
+    }
 
-        // Chroma should have frames
-        assert!(r.map_or(false, |r| !r.chroma.is_empty()));
-
-        // Spectral centroid should be positive
-        assert!(r.map_or(false, |r| r.spectral_centroid > 0.0));
-
-        // Spectral flatness in [0, 1]
-        assert!(r.map_or(false, |r| r.spectral_flatness >= 0.0
-            && r.spectral_flatness <= 1.0));
+    #[test]
+    fn analyse_silence() {
+        let sample_rate = 44100_u32;
+        let audio = AudioFile::from_samples(vec![0.0_f32; 44100], sample_rate, 1);
+        let result = audio.analyse();
+        assert!(
+            result.is_ok(),
+            "analyse() on silence failed: {:?}",
+            result.err()
+        );
+        if let Ok(r) = result {
+            // Silence → no BPM
+            assert!(r.bpm.is_none());
+            // Peak and RMS at floor
+            assert!((r.peak_db - (-120.0)).abs() < 1.0);
+        }
     }
 
     #[test]
@@ -825,9 +849,20 @@ mod tests {
                 result.err()
             );
             if let Ok(r) = &result {
-                assert!(r.tempo.bpm > 0.0 || r.tempo.confidence == 0.0);
-                assert!(r.spectral_centroid >= 0.0);
+                assert!(r.bpm_confidence >= 0.0 && r.bpm_confidence <= 1.0);
+                assert!(r.peak_db <= 0.1); // dBFS ≤ 0 for normalised audio
             }
         }
+    }
+
+    #[test]
+    fn with_analysis_window_compiles() {
+        let audio = make_sine(8192, 440.0, 44100).with_analysis_window(2048);
+        let result = audio.analyse();
+        assert!(
+            result.is_ok(),
+            "analyse() with custom window failed: {:?}",
+            result.err()
+        );
     }
 }
