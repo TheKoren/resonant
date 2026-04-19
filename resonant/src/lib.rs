@@ -26,13 +26,15 @@
 //! resonant crates so that casual users can `use resonant::*` without pulling
 //! in sub-crate details.
 
+pub mod analysis;
 pub mod audio_file;
 pub(crate) mod decode;
 pub mod error;
 pub mod frequency_bin;
 
 // === Facade types ===
-pub use audio_file::{AnalysisResult, AudioFile, FftFrameIter, WindowFn};
+pub use analysis::AnalysisResult;
+pub use audio_file::{AudioFile, FftFrameIter, WindowFn};
 pub use error::AudioError;
 pub use frequency_bin::FrequencyBin;
 
@@ -64,6 +66,9 @@ pub use resonant_filters::design;
 
 /// Audio analysis error type.
 pub use resonant_analysis::AnalysisError;
+
+/// Musical key types returned in [`AnalysisResult`].
+pub use resonant_analysis::{KeyEstimate, Mode, PitchClass};
 
 /// High-level analysis modules.
 pub use resonant_analysis::{chroma, mfcc, onset, pitch, spectral, tempo};
