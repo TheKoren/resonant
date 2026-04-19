@@ -78,6 +78,7 @@ impl From<resonant_analysis::AnalysisError> for AudioError {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
     use super::*;
 
     #[cfg(feature = "serde")]
