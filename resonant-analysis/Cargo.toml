@@ -13,7 +13,7 @@ keywords = ["dsp", "audio", "analysis", "pitch", "beat"]
 resonant-core = { version = "0.2.0", path = "../resonant-core", default-features = false, features = ["alloc"] }
 resonant-fft = { version = "0.2.0", path = "../resonant-fft" }
 resonant-filters = { version = "0.2.0", path = "../resonant-filters" }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [features]
 default = []

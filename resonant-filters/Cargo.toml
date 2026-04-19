@@ -13,7 +13,7 @@ keywords = ["dsp", "filter", "biquad", "iir", "fir"]
 resonant-core = { version = "0.2.0", path = "../resonant-core" }
 resonant-fft = { version = "0.2.0", path = "../resonant-fft", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
 
 [features]
 default = ["alloc"]
