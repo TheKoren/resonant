@@ -162,13 +162,8 @@ impl TempoEstimator {
         Ok(TempoEstimate { bpm, confidence })
     }
 
-    /// Infers the hop size from the onset detector.
     fn onset_detector_hop(&self) -> usize {
-        // OnsetDetector's default hop is 512; we access it indirectly
-        // via the stored field. Since OnsetDetector fields are private,
-        // we reconstruct the default or use the stored detector's config.
-        // For now, use the same default hop of 512.
-        512
+        self.onset_detector.hop_size()
     }
 }
 
@@ -356,6 +351,29 @@ mod tests {
         let e = TempoEstimator::new(SR).with_onset_detector(d);
         // Just verify it compiles and doesn't panic
         let _ = e;
+    }
+
+    #[test]
+    fn custom_hop_reads_stored_detector() {
+        // TempoEstimator with hop=256 must use that hop in the BPM formula,
+        // not the default 512. Both estimators receive the same 120 BPM click
+        // track and both should land within 5 BPM of 120.
+        let samples = click_track(120.0, 8.0, SR);
+
+        let est_default = TempoEstimator::new(SR).estimate(&samples).ok();
+        let est_custom = TempoEstimator::new(SR)
+            .with_onset_detector(OnsetDetector::new(SR).with_hop_size(256))
+            .estimate(&samples)
+            .ok();
+
+        assert!(
+            est_default.is_some_and(|e| (e.bpm - 120.0).abs() < 5.0),
+            "default-hop estimator should detect ~120 BPM, got {est_default:?}"
+        );
+        assert!(
+            est_custom.is_some_and(|e| (e.bpm - 120.0).abs() < 5.0),
+            "custom-hop (256) estimator should detect ~120 BPM, got {est_custom:?}"
+        );
     }
 
     #[cfg(feature = "serde")]
