@@ -80,6 +80,13 @@ impl OnsetDetector {
         self
     }
 
+    /// Returns the configured hop size in samples.
+    #[must_use]
+    #[inline]
+    pub fn hop_size(&self) -> usize {
+        self.hop_size
+    }
+
     /// Sets the STFT hop size.
     #[must_use]
     pub fn with_hop_size(mut self, hop: usize) -> Self {
