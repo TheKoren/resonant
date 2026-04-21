@@ -333,7 +333,11 @@ impl AudioFile {
         let win = self.config.analysis_window_size;
 
         // Tempo
-        let tempo = TempoEstimator::new(sr).estimate(mono)?;
+        let mut te = TempoEstimator::new(sr);
+        if let Some(w) = win {
+            te = te.with_onset_detector(OnsetDetector::new(sr).with_window_size(w));
+        }
+        let tempo = te.estimate(mono)?;
         let bpm = if tempo.confidence >= TempoEstimator::CONFIDENCE_LOW {
             Some(tempo.bpm)
         } else {
@@ -863,6 +867,35 @@ mod tests {
             result.is_ok(),
             "analyse() with custom window failed: {:?}",
             result.err()
+        );
+    }
+
+    #[test]
+    fn with_analysis_window_propagates_to_tempo() {
+        use resonant_analysis::onset::OnsetDetector;
+        use resonant_analysis::tempo::TempoEstimator;
+
+        let sample_rate = 44100_u32;
+        let sr = sample_rate as f32;
+        let audio = make_sine(44100, 440.0, sample_rate);
+        let mono = audio.samples_mono();
+
+        // analyse() with a 2048-point window
+        let result = audio.clone().with_analysis_window(2048).analyse();
+        assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
+        let facade_bpm_conf = result.ok().map(|r| r.bpm_confidence).unwrap_or(-1.0);
+
+        // Manually construct the same TempoEstimator that analyse() should use
+        let manual_conf = TempoEstimator::new(sr)
+            .with_onset_detector(OnsetDetector::new(sr).with_window_size(2048))
+            .estimate(mono)
+            .ok()
+            .map(|e| e.confidence)
+            .unwrap_or(-2.0);
+
+        assert!(
+            (facade_bpm_conf - manual_conf).abs() < 1e-4,
+            "analyse() bpm_confidence ({facade_bpm_conf}) differs from manual ({manual_conf})"
         );
     }
 }
