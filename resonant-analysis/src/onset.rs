@@ -181,18 +181,21 @@ impl OnsetDetector {
 
 /// Half-wave rectified spectral flux between consecutive magnitude frames.
 fn spectral_flux(prev: &[f32], curr: &[f32]) -> f32 {
-    prev.iter().zip(curr).map(|(p, c)| (c - p).max(0.0)).sum()
+    prev.iter()
+        .zip(curr)
+        .map(|(prev_mag, curr_mag)| (curr_mag - prev_mag).max(0.0))
+        .sum()
 }
 
 /// Adaptive threshold: local median + multiplier × local mean absolute deviation.
 fn adaptive_threshold(envelope: &[f32], window: usize, multiplier: f32) -> Vec<f32> {
-    let n = envelope.len();
-    let mut thresholds = Vec::with_capacity(n);
-    let half = window / 2;
+    let envelope_len = envelope.len();
+    let mut thresholds = Vec::with_capacity(envelope_len);
+    let half_window = window / 2;
 
-    for i in 0..n {
-        let start = i.saturating_sub(half);
-        let end = (i + half + 1).min(n);
+    for i in 0..envelope_len {
+        let start = i.saturating_sub(half_window);
+        let end = (i + half_window + 1).min(envelope_len);
         let local = &envelope[start..end];
 
         let median = local_median(local);
@@ -210,11 +213,11 @@ fn local_median(values: &[f32]) -> f32 {
     }
     let mut sorted: Vec<f32> = values.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
-    let mid = sorted.len() / 2;
+    let median_idx = sorted.len() / 2;
     if sorted.len() % 2 == 0 {
-        (sorted[mid - 1] + sorted[mid]) / 2.0
+        (sorted[median_idx - 1] + sorted[median_idx]) / 2.0
     } else {
-        sorted[mid]
+        sorted[median_idx]
     }
 }
 
@@ -223,7 +226,7 @@ fn local_mad(values: &[f32], median: f32) -> f32 {
     if values.is_empty() {
         return 0.0;
     }
-    let sum: f32 = values.iter().map(|v| (v - median).abs()).sum();
+    let sum: f32 = values.iter().map(|sample| (sample - median).abs()).sum();
     sum / values.len() as f32
 }
 
@@ -231,9 +234,12 @@ fn local_mad(values: &[f32], median: f32) -> f32 {
 fn pick_peaks(envelope: &[f32], threshold: &[f32]) -> Vec<(usize, f32)> {
     let mut peaks = Vec::new();
     for i in 1..envelope.len().saturating_sub(1) {
-        let v = envelope[i];
-        if v > threshold[i] && v >= envelope[i - 1] && v >= envelope[i + 1] {
-            peaks.push((i, v));
+        let flux_value = envelope[i];
+        if flux_value > threshold[i]
+            && flux_value >= envelope[i - 1]
+            && flux_value >= envelope[i + 1]
+        {
+            peaks.push((i, flux_value));
         }
     }
     peaks

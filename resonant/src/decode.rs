@@ -131,17 +131,17 @@ pub(crate) fn downmix_to_mono(interleaved: &[f32], channels: u16) -> Vec<f32> {
 }
 
 /// Scalar N-channel downmix.
-fn downmix_generic(interleaved: &[f32], ch: usize) -> Vec<f32> {
-    let num_frames = interleaved.len() / ch;
-    let scale = 1.0 / ch as f32;
+fn downmix_generic(interleaved: &[f32], num_channels: usize) -> Vec<f32> {
+    let num_frames = interleaved.len() / num_channels;
+    let scale = 1.0 / num_channels as f32;
     let mut mono = Vec::with_capacity(num_frames);
     for frame in 0..num_frames {
-        let start = frame * ch;
-        let mut sum = 0.0_f32;
-        for c in 0..ch {
-            sum += interleaved[start + c];
+        let start = frame * num_channels;
+        let mut channel_sum = 0.0_f32;
+        for channel_idx in 0..num_channels {
+            channel_sum += interleaved[start + channel_idx];
         }
-        mono.push(sum * scale);
+        mono.push(channel_sum * scale);
     }
     mono
 }
@@ -187,21 +187,21 @@ fn downmix_stereo_x86(interleaved: &[f32], mono: &mut [f32]) {
     // SAFETY: SSE2 is guaranteed on x86_64. We load 8 f32s (4 stereo frames)
     // per iteration and produce 4 mono samples.
     unsafe {
-        let half = _mm_set1_ps(0.5);
+        let half_scale = _mm_set1_ps(0.5);
         for i in 0..chunks {
-            let f_off = i * 8;
-            let o_off = i * 4;
+            let frame_offset = i * 8;
+            let output_offset = i * 4;
 
             // Load [L0,R0,L1,R1] and [L2,R2,L3,R3]
-            let v0 = _mm_loadu_ps(interleaved.as_ptr().add(f_off));
-            let v1 = _mm_loadu_ps(interleaved.as_ptr().add(f_off + 4));
+            let v0 = _mm_loadu_ps(interleaved.as_ptr().add(frame_offset));
+            let v1 = _mm_loadu_ps(interleaved.as_ptr().add(frame_offset + 4));
 
             // Deinterleave: lefts = [L0,L1,L2,L3], rights = [R0,R1,R2,R3]
             let lefts = _mm_shuffle_ps::<0b10_00_10_00>(v0, v1);
             let rights = _mm_shuffle_ps::<0b11_01_11_01>(v0, v1);
 
-            let sum = _mm_mul_ps(_mm_add_ps(lefts, rights), half);
-            _mm_storeu_ps(mono.as_mut_ptr().add(o_off), sum);
+            let mixed_frames = _mm_mul_ps(_mm_add_ps(lefts, rights), half_scale);
+            _mm_storeu_ps(mono.as_mut_ptr().add(output_offset), mixed_frames);
         }
     }
 
@@ -224,14 +224,14 @@ fn downmix_stereo_neon(interleaved: &[f32], mono: &mut [f32]) {
     // SAFETY: NEON is guaranteed on aarch64. vld2q_f32 deinterleaves 8 f32s
     // into two 4-wide vectors (lefts and rights).
     unsafe {
-        let half = vdupq_n_f32(0.5);
+        let half_scale = vdupq_n_f32(0.5);
         for i in 0..chunks {
-            let f_off = i * 8;
-            let o_off = i * 4;
+            let frame_offset = i * 8;
+            let output_offset = i * 4;
 
-            let pair = vld2q_f32(interleaved.as_ptr().add(f_off));
-            let sum = vmulq_f32(vaddq_f32(pair.0, pair.1), half);
-            vst1q_f32(mono.as_mut_ptr().add(o_off), sum);
+            let pair = vld2q_f32(interleaved.as_ptr().add(frame_offset));
+            let mixed_frames = vmulq_f32(vaddq_f32(pair.0, pair.1), half_scale);
+            vst1q_f32(mono.as_mut_ptr().add(output_offset), mixed_frames);
         }
     }
 
