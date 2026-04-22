@@ -25,7 +25,7 @@ use resonant_fft::{SignalFftExt, SignalFreqExt};
 
 use crate::analysis::AnalysisResult;
 
-use crate::decode::{decode_path, downmix_to_mono};
+use crate::decode::{decode_path, downmix_bs1770, downmix_to_mono};
 use crate::error::AudioError;
 use crate::frequency_bin::FrequencyBin;
 
@@ -361,10 +361,11 @@ impl AudioFile {
             .detect(&chroma)
             .filter(|k| k.confidence > 0.3);
 
-        // Integrated loudness — silently None for unsupported rates or short signals
+        // Integrated loudness — BS.1770-4 weighted downmix for stereo/multi-channel
+        let lufs_mono = downmix_bs1770(&self.samples_interleaved, self.channels);
         let loudness_lufs = LufsAnalyser::new(sr)
             .ok()
-            .and_then(|mut a| a.integrated_loudness(mono).ok());
+            .and_then(|mut a| a.integrated_loudness(&lufs_mono).ok());
 
         // Level
         let la = LoudnessAnalyser::new();
@@ -868,6 +869,51 @@ mod tests {
             "analyse() with custom window failed: {:?}",
             result.err()
         );
+    }
+
+    #[test]
+    fn analyse_lufs_uses_bs1770_for_stereo() {
+        // Build a stereo signal: L = sine, R = sine (identical channels).
+        // With the naive (L+R)/2 mono average, LUFS equals the mono sine level.
+        // With BS.1770-4 downmix (L+R)/sqrt(2), LUFS is ~3 LU higher.
+        // Build a second signal: L = sine, R = 0.
+        // The difference between the two LUFS values should be ~6 LU
+        // (full stereo ms = 2*A^2, half stereo ms = A^2/2, ratio = 4 → 6 dB).
+        use std::f32::consts::PI;
+        let sample_rate = 44100_u32;
+        let sr = sample_rate as f32;
+        let n = (sr * 3.0) as usize; // 3 seconds — enough for LUFS gating
+
+        let sine: Vec<f32> = (0..n)
+            .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
+            .collect();
+
+        // Interleaved stereo: L=sine, R=sine
+        let mut both = Vec::with_capacity(n * 2);
+        for &s in &sine {
+            both.push(s);
+            both.push(s);
+        }
+        // Interleaved stereo: L=sine, R=silent
+        let mut left_only = Vec::with_capacity(n * 2);
+        for &s in &sine {
+            left_only.push(s);
+            left_only.push(0.0_f32);
+        }
+
+        let af_both = AudioFile::from_samples(both, sample_rate, 2);
+        let af_left = AudioFile::from_samples(left_only, sample_rate, 2);
+
+        let lufs_both = af_both.analyse().ok().and_then(|r| r.loudness_lufs);
+        let lufs_left = af_left.analyse().ok().and_then(|r| r.loudness_lufs);
+
+        if let (Some(lb), Some(ll)) = (lufs_both, lufs_left) {
+            let diff = lb - ll;
+            assert!(
+                (diff - 6.0).abs() < 1.0,
+                "expected ~6 LU between full-stereo and L-only, got {diff:.2} LU"
+            );
+        }
     }
 
     #[test]

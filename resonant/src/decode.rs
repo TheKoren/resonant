@@ -90,6 +90,32 @@ pub(crate) fn decode_path<P: AsRef<Path>>(path: P) -> Result<(Vec<f32>, u32, u16
     Ok((all_samples, sample_rate, channels))
 }
 
+/// Downmix interleaved samples to mono using ITU-R BS.1770-4 channel weights.
+///
+/// For mono, returns a copy of the input unchanged.
+/// For stereo, sums L and R then scales by `1 / sqrt(2)` to preserve the
+/// mean-square level that BS.1770-4 assigns to a two-channel signal
+/// (`output[i] = (L[i] + R[i]) / sqrt(2)`).
+/// For >2 channels, falls back to an equal-weight average; accurate per-channel
+/// weighting (LFE exclusion, Ls/Rs +3 dB) requires knowing the channel layout,
+/// which is not available from the channel count alone.
+pub(crate) fn downmix_bs1770(interleaved: &[f32], channels: u16) -> Vec<f32> {
+    if channels <= 1 {
+        return interleaved.to_vec();
+    }
+    if channels == 2 {
+        let num_frames = interleaved.len() / 2;
+        // SAFETY: 1.0 / sqrt(2) is a compile-time constant; no UB.
+        let scale = 1.0_f32 / 2.0_f32.sqrt();
+        let mut out = Vec::with_capacity(num_frames);
+        for frame in 0..num_frames {
+            out.push((interleaved[frame * 2] + interleaved[frame * 2 + 1]) * scale);
+        }
+        return out;
+    }
+    downmix_to_mono(interleaved, channels)
+}
+
 /// Average all channels down to mono.
 ///
 /// The stereo (2-channel) case uses a SIMD-accelerated path on x86_64 and
@@ -235,5 +261,56 @@ mod tests {
         assert_eq!(mono.len(), 2);
         assert!((mono[0] - 0.5).abs() < 1e-6);
         assert!((mono[1] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn bs1770_mono_passthrough() {
+        let samples = vec![0.1, 0.2, 0.3, 0.4];
+        let out = downmix_bs1770(&samples, 1);
+        assert_eq!(out, samples);
+    }
+
+    #[test]
+    fn bs1770_stereo_identical_channels() {
+        // L = R = A → output = A * sqrt(2)
+        let a = 0.5_f32;
+        let interleaved = vec![a, a, a, a]; // two frames of [L=A, R=A]
+        let out = downmix_bs1770(&interleaved, 2);
+        let expected = a * 2.0_f32.sqrt();
+        assert_eq!(out.len(), 2);
+        for &s in &out {
+            assert!((s - expected).abs() < 1e-6, "got {s}, expected {expected}");
+        }
+    }
+
+    #[test]
+    fn bs1770_stereo_right_silent() {
+        // L = A, R = 0 → output = A / sqrt(2)
+        let a = 0.5_f32;
+        let interleaved = vec![a, 0.0, a, 0.0];
+        let out = downmix_bs1770(&interleaved, 2);
+        let expected = a / 2.0_f32.sqrt();
+        assert_eq!(out.len(), 2);
+        for &s in &out {
+            assert!((s - expected).abs() < 1e-6, "got {s}, expected {expected}");
+        }
+    }
+
+    #[test]
+    fn bs1770_stereo_full_vs_half_mean_square_ratio() {
+        // Full stereo (L=R=A): mean-sq = 2*A^2
+        // L-only   (L=A,R=0): mean-sq = A^2/2
+        // Ratio = 4 → 6 dB, reflecting both channels contributing
+        let a = 0.5_f32;
+        let full = downmix_bs1770(&vec![a, a, a, a], 2);
+        let half = downmix_bs1770(&vec![a, 0.0, a, 0.0], 2);
+
+        let ms_full: f32 = full.iter().map(|x| x * x).sum::<f32>() / full.len() as f32;
+        let ms_half: f32 = half.iter().map(|x| x * x).sum::<f32>() / half.len() as f32;
+        let ratio_db = 10.0 * (ms_full / ms_half).log10();
+        assert!(
+            (ratio_db - 6.0).abs() < 0.1,
+            "expected 6 dB ratio, got {ratio_db:.3} dB"
+        );
     }
 }
