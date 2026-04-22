@@ -13,12 +13,13 @@ keywords = ["dsp", "filter", "biquad", "iir", "fir"]
 resonant-core = { version = "0.3.0", path = "../resonant-core" }
 resonant-fft = { version = "0.3.0", path = "../resonant-fft", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
-serde = { version = "1", default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 [features]
 default = ["alloc"]
 alloc = []
-serde = ["dep:serde", "alloc"]
+serde = ["dep:serde"]
+serde-alloc = ["serde", "alloc", "serde/alloc"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

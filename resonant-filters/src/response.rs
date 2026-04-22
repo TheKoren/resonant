@@ -40,7 +40,7 @@ impl core::fmt::Display for FilterError {
 /// All three vectors have the same length (`n_points`).
 /// Frequencies run from 0 Hz (DC) to `sample_rate / 2` (Nyquist), inclusive.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde-alloc", derive(serde::Serialize, serde::Deserialize))]
 pub struct FrequencyResponse {
     /// Frequency axis in Hz.
     pub frequencies: Vec<f32>,
@@ -483,7 +483,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "serde-alloc")]
     #[test]
     fn frequency_response_serde_roundtrip() {
         let fr = FrequencyResponse {
