@@ -169,15 +169,15 @@ impl TempoEstimator {
 
 /// Normalized autocorrelation of the envelope.
 fn autocorrelation(envelope: &[f32], max_lag: usize) -> Vec<f32> {
-    let n = envelope.len();
+    let envelope_len = envelope.len();
     let mut acf = vec![0.0_f32; max_lag + 1];
 
     for lag in 0..=max_lag {
-        let mut sum = 0.0_f32;
-        for i in 0..n - lag {
-            sum += envelope[i] * envelope[i + lag];
+        let mut lag_sum = 0.0_f32;
+        for i in 0..envelope_len - lag {
+            lag_sum += envelope[i] * envelope[i + lag];
         }
-        acf[lag] = sum;
+        acf[lag] = lag_sum;
     }
     acf
 }
@@ -193,9 +193,9 @@ fn find_best_peak(acf: &[f32], min_lag: usize, max_lag: usize) -> (usize, f32) {
     // Find global max position in range
     let mut best_lag = min_lag;
     let mut best_val = acf[min_lag];
-    for (lag, &val) in acf.iter().enumerate().take(end + 1).skip(min_lag) {
-        if val > best_val {
-            best_val = val;
+    for (lag, &acf_value) in acf.iter().enumerate().take(end + 1).skip(min_lag) {
+        if acf_value > best_val {
+            best_val = acf_value;
             best_lag = lag;
         }
     }
@@ -216,14 +216,14 @@ fn parabolic_interpolation(acf: &[f32], lag: usize) -> f32 {
     if lag == 0 || lag >= acf.len() - 1 {
         return lag as f32;
     }
-    let s0 = acf[lag - 1];
-    let s1 = acf[lag];
-    let s2 = acf[lag + 1];
-    let denom = 2.0 * s1 - s0 - s2;
+    let prev_acf = acf[lag - 1];
+    let peak_acf = acf[lag];
+    let next_acf = acf[lag + 1];
+    let denom = 2.0 * peak_acf - prev_acf - next_acf;
     if denom.abs() < f32::EPSILON {
         return lag as f32;
     }
-    lag as f32 + (s0 - s2) / (2.0 * denom)
+    lag as f32 + (prev_acf - next_acf) / (2.0 * denom)
 }
 
 #[cfg(test)]

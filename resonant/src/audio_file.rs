@@ -259,18 +259,18 @@ impl AudioFile {
         // Extract magnitude and phase
         let magnitudes = freq.magnitude();
         let phases = freq.phase();
-        let n = magnitudes.len();
-        let num_bins = n / 2 + 1;
+        let fft_len = magnitudes.len();
+        let num_bins = fft_len / 2 + 1;
         let rate = self.sample_rate as f32;
-        let n_f = n as f32;
-        let db = self.config.db_scale;
+        let fft_len_f32 = fft_len as f32;
+        let use_db_scale = self.config.db_scale;
 
         let bins: Vec<FrequencyBin> = (0..num_bins)
             .map(|k| {
                 let mag = magnitudes[k];
                 FrequencyBin {
-                    frequency_hz: k as f32 * rate / n_f,
-                    magnitude: if db {
+                    frequency_hz: k as f32 * rate / fft_len_f32,
+                    magnitude: if use_db_scale {
                         20.0 * mag.max(f32::MIN_POSITIVE).log10()
                     } else {
                         mag
@@ -330,14 +330,15 @@ impl AudioFile {
     pub fn analyse(&self) -> Result<AnalysisResult, AudioError> {
         let mono = self.samples_mono();
         let sr = self.sample_rate as f32;
-        let win = self.config.analysis_window_size;
+        let analysis_window = self.config.analysis_window_size;
 
         // Tempo
-        let mut te = TempoEstimator::new(sr);
-        if let Some(w) = win {
-            te = te.with_onset_detector(OnsetDetector::new(sr).with_window_size(w));
+        let mut tempo_estimator = TempoEstimator::new(sr);
+        if let Some(window_size) = analysis_window {
+            tempo_estimator = tempo_estimator
+                .with_onset_detector(OnsetDetector::new(sr).with_window_size(window_size));
         }
-        let tempo = te.estimate(mono)?;
+        let tempo = tempo_estimator.estimate(mono)?;
         let bpm = if tempo.confidence >= TempoEstimator::CONFIDENCE_LOW {
             Some(tempo.bpm)
         } else {
@@ -345,18 +346,22 @@ impl AudioFile {
         };
 
         // Onsets → timestamps in seconds
-        let mut od = OnsetDetector::new(sr);
-        if let Some(w) = win {
-            od = od.with_window_size(w);
+        let mut onset_detector = OnsetDetector::new(sr);
+        if let Some(window_size) = analysis_window {
+            onset_detector = onset_detector.with_window_size(window_size);
         }
-        let onsets: Vec<f32> = od.detect(mono)?.into_iter().map(|o| o.time_secs).collect();
+        let onsets: Vec<f32> = onset_detector
+            .detect(mono)?
+            .into_iter()
+            .map(|o| o.time_secs)
+            .collect();
 
         // Key via chroma → Krumhansl-Schmuckler
-        let mut ce = ChromaExtractor::new(sr);
-        if let Some(w) = win {
-            ce = ce.with_window_size(w);
+        let mut chroma_extractor = ChromaExtractor::new(sr);
+        if let Some(window_size) = analysis_window {
+            chroma_extractor = chroma_extractor.with_window_size(window_size);
         }
-        let chroma = ce.extract(mono)?;
+        let chroma = chroma_extractor.extract(mono)?;
         let key = KeyDetector::new()
             .detect(&chroma)
             .filter(|k| k.confidence > 0.3);
@@ -365,12 +370,12 @@ impl AudioFile {
         let lufs_mono = downmix_bs1770(&self.samples_interleaved, self.channels);
         let loudness_lufs = LufsAnalyser::new(sr)
             .ok()
-            .and_then(|mut a| a.integrated_loudness(&lufs_mono).ok());
+            .and_then(|mut lufs_analyser| lufs_analyser.integrated_loudness(&lufs_mono).ok());
 
         // Level
-        let la = LoudnessAnalyser::new();
-        let peak_db = la.peak_db(mono);
-        let rms_db = la.rms_db(mono);
+        let loudness_analyser = LoudnessAnalyser::new();
+        let peak_db = loudness_analyser.peak_db(mono);
+        let rms_db = loudness_analyser.rms_db(mono);
 
         Ok(AnalysisResult {
             bpm,
@@ -421,18 +426,18 @@ impl Iterator for FftFrameIter<'_> {
 
         let magnitudes = freq.magnitude();
         let phases = freq.phase();
-        let n = magnitudes.len();
-        let num_bins = n / 2 + 1;
+        let fft_len = magnitudes.len();
+        let num_bins = fft_len / 2 + 1;
         let rate = self.sample_rate as f32;
-        let n_f = n as f32;
-        let db = self.db_scale;
+        let fft_len_f32 = fft_len as f32;
+        let use_db_scale = self.db_scale;
 
         let bins: Vec<FrequencyBin> = (0..num_bins)
             .map(|k| {
                 let mag = magnitudes[k];
                 FrequencyBin {
-                    frequency_hz: k as f32 * rate / n_f,
-                    magnitude: if db {
+                    frequency_hz: k as f32 * rate / fft_len_f32,
+                    magnitude: if use_db_scale {
                         20.0 * mag.max(f32::MIN_POSITIVE).log10()
                     } else {
                         mag
