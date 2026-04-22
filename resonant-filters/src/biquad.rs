@@ -78,10 +78,10 @@ impl Biquad {
     /// Uses direct form II transposed for numerical stability.
     #[inline]
     pub fn process_sample(&mut self, input: f32) -> f32 {
-        let c = &self.coeffs;
-        let output = c.b0 * input + self.state.s1;
-        self.state.s1 = c.b1 * input - c.a1 * output + self.state.s2;
-        self.state.s2 = c.b2 * input - c.a2 * output;
+        let coeffs = &self.coeffs;
+        let output = coeffs.b0 * input + self.state.s1;
+        self.state.s1 = coeffs.b1 * input - coeffs.a1 * output + self.state.s2;
+        self.state.s2 = coeffs.b2 * input - coeffs.a2 * output;
         output
     }
 
@@ -142,10 +142,10 @@ mod tests {
 
     #[test]
     fn passthrough_echoes_input() {
-        let mut f = Biquad::new(BiquadCoeffs::PASSTHROUGH);
+        let mut filter = Biquad::new(BiquadCoeffs::PASSTHROUGH);
         for i in 0..10 {
             let x = i as f32 * 0.1;
-            assert!((f.process_sample(x) - x).abs() < 1e-6);
+            assert!((filter.process_sample(x) - x).abs() < 1e-6);
         }
     }
 
@@ -161,40 +161,46 @@ mod tests {
         let input = [1.0_f32, 0.5, -0.3, 0.7, -0.1, 0.0, 0.4, -0.8];
 
         // sample-by-sample
-        let mut f1 = Biquad::new(coeffs);
-        let expected: Vec<f32> = input.iter().map(|&x| f1.process_sample(x)).collect();
+        let mut filter_sample = Biquad::new(coeffs);
+        let expected: Vec<f32> = input
+            .iter()
+            .map(|&x| filter_sample.process_sample(x))
+            .collect();
 
         // buffer mode
-        let mut f2 = Biquad::new(coeffs);
+        let mut filter_buf = Biquad::new(coeffs);
         let mut buf = input;
-        f2.process_buf(&mut buf);
+        filter_buf.process_buf(&mut buf);
 
-        for (a, b) in buf.iter().zip(expected.iter()) {
-            assert!((a - b).abs() < 1e-6, "mismatch: {a} vs {b}");
+        for (buf_sample, expected_sample) in buf.iter().zip(expected.iter()) {
+            assert!(
+                (buf_sample - expected_sample).abs() < 1e-6,
+                "mismatch: {buf_sample} vs {expected_sample}"
+            );
         }
     }
 
     #[test]
     fn reset_zeroes_state() {
-        let mut f = Biquad::new(BiquadCoeffs {
+        let mut filter = Biquad::new(BiquadCoeffs {
             b0: 0.5,
             b1: 0.3,
             b2: 0.0,
             a1: -0.1,
             a2: 0.0,
         });
-        f.process_sample(1.0);
-        assert_ne!(f.state().s1, 0.0);
-        f.reset();
-        assert_eq!(f.state().s1, 0.0);
-        assert_eq!(f.state().s2, 0.0);
+        filter.process_sample(1.0);
+        assert_ne!(filter.state().s1, 0.0);
+        filter.reset();
+        assert_eq!(filter.state().s1, 0.0);
+        assert_eq!(filter.state().s2, 0.0);
     }
 
     #[test]
     fn set_coeffs_preserves_state() {
-        let mut f = Biquad::new(BiquadCoeffs::PASSTHROUGH);
-        f.process_sample(1.0);
-        let state_before = *f.state();
+        let mut filter = Biquad::new(BiquadCoeffs::PASSTHROUGH);
+        filter.process_sample(1.0);
+        let state_before = *filter.state();
 
         let new_coeffs = BiquadCoeffs {
             b0: 0.5,
@@ -203,9 +209,9 @@ mod tests {
             a1: 0.0,
             a2: 0.0,
         };
-        f.set_coeffs(new_coeffs);
-        assert_eq!(*f.state(), state_before);
-        assert_eq!(*f.coeffs(), new_coeffs);
+        filter.set_coeffs(new_coeffs);
+        assert_eq!(*filter.state(), state_before);
+        assert_eq!(*filter.coeffs(), new_coeffs);
     }
 
     #[test]
@@ -217,9 +223,9 @@ mod tests {
             a1: -0.3,
             a2: 0.1,
         };
-        let mut f = Biquad::new(coeffs);
-        let y0 = f.process_sample(1.0);
-        assert!((y0 - 0.7).abs() < 1e-6);
+        let mut filter = Biquad::new(coeffs);
+        let first_output = filter.process_sample(1.0);
+        assert!((first_output - 0.7).abs() < 1e-6);
     }
 
     #[test]
@@ -234,11 +240,11 @@ mod tests {
         };
         let dc_gain = (coeffs.b0 + coeffs.b1 + coeffs.b2) / (1.0 + coeffs.a1 + coeffs.a2);
 
-        let mut f = Biquad::new(coeffs);
+        let mut filter = Biquad::new(coeffs);
         // Feed DC (constant 1.0) for enough samples to settle
         let mut output = 0.0;
         for _ in 0..1000 {
-            output = f.process_sample(1.0);
+            output = filter.process_sample(1.0);
         }
         assert!(
             (output - dc_gain).abs() < 1e-3,
@@ -248,10 +254,10 @@ mod tests {
 
     #[test]
     fn state_accessible() {
-        let mut f = Biquad::new(BiquadCoeffs::PASSTHROUGH);
-        f.process_sample(1.0);
+        let mut filter = Biquad::new(BiquadCoeffs::PASSTHROUGH);
+        filter.process_sample(1.0);
         // State should be readable
-        let _s = f.state();
+        let _state = filter.state();
     }
 
     #[test]
@@ -263,17 +269,17 @@ mod tests {
             a1: -0.9,
             a2: 0.0,
         };
-        let mut f = Biquad::new(coeffs);
-        f.process_sample(1.0);
+        let mut filter = Biquad::new(coeffs);
+        filter.process_sample(1.0);
 
         // Feed zeros — output should decay toward 0
-        let mut prev = f.process_sample(0.0).abs();
+        let mut prev_output = filter.process_sample(0.0).abs();
         for _ in 0..100 {
-            let y = f.process_sample(0.0).abs();
-            assert!(y <= prev + 1e-6);
-            prev = y;
+            let current_output = filter.process_sample(0.0).abs();
+            assert!(current_output <= prev_output + 1e-6);
+            prev_output = current_output;
         }
-        assert!(prev < 1e-3);
+        assert!(prev_output < 1e-3);
     }
 
     #[cfg(feature = "serde")]

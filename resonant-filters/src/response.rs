@@ -207,8 +207,10 @@ impl FilterResponseExt for Fir {
         }
 
         // Find smallest power-of-two N so that N/2+1 >= n_points.
-        let min_n = (n_points - 1) * 2; // need N/2 >= n_points-1
-        let fft_len = min_n.next_power_of_two().max(n_taps.next_power_of_two());
+        let min_fft_len = (n_points - 1) * 2; // need N/2 >= n_points-1
+        let fft_len = min_fft_len
+            .next_power_of_two()
+            .max(n_taps.next_power_of_two());
 
         // Zero-padded coefficient buffer
         let mut padded = vec![0.0_f32; fft_len];
@@ -229,12 +231,13 @@ impl FilterResponseExt for Fir {
 
         for i in 0..n_points {
             // Map n_points indices to bins 0..n_bins
-            let bin_f = i as f32 * (n_bins - 1) as f32 / (n_points - 1) as f32;
-            let bin = bin_f.round() as usize;
-            let c = bins[bin.min(n_bins - 1)];
+            let bin_idx_f32 = i as f32 * (n_bins - 1) as f32 / (n_points - 1) as f32;
+            let bin_idx = bin_idx_f32.round() as usize;
+            let complex_bin = bins[bin_idx.min(n_bins - 1)];
             frequencies[i] = nyquist * i as f32 / (n_points - 1) as f32;
-            magnitudes[i] = (c.re * c.re + c.im * c.im).sqrt();
-            phases[i] = c.im.atan2(c.re);
+            magnitudes[i] =
+                (complex_bin.re * complex_bin.re + complex_bin.im * complex_bin.im).sqrt();
+            phases[i] = complex_bin.im.atan2(complex_bin.re);
         }
 
         Ok(FrequencyResponse {
@@ -261,7 +264,7 @@ mod tests {
 
     #[test]
     fn biquad_invalid_params() {
-        let c = BiquadCoeffs {
+        let coeffs = BiquadCoeffs {
             b0: 1.0,
             b1: 0.0,
             b2: 0.0,
@@ -269,15 +272,15 @@ mod tests {
             a2: 0.0,
         };
         assert_eq!(
-            c.frequency_response(1, 44100.0),
+            coeffs.frequency_response(1, 44100.0),
             Err(FilterError::InvalidParameter)
         );
         assert_eq!(
-            c.frequency_response(512, 0.0),
+            coeffs.frequency_response(512, 0.0),
             Err(FilterError::InvalidParameter)
         );
         assert_eq!(
-            c.frequency_response(512, -1.0),
+            coeffs.frequency_response(512, -1.0),
             Err(FilterError::InvalidParameter)
         );
     }
@@ -285,14 +288,14 @@ mod tests {
     #[test]
     fn biquad_passthrough_has_unity_magnitude() {
         // b0=1, all others 0 → flat magnitude 1.0 everywhere
-        let c = BiquadCoeffs {
+        let coeffs = BiquadCoeffs {
             b0: 1.0,
             b1: 0.0,
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
         };
-        let resp = c.frequency_response(64, 44100.0).unwrap();
+        let resp = coeffs.frequency_response(64, 44100.0).unwrap();
         for &m in &resp.magnitudes {
             assert!((m - 1.0).abs() < 1e-5, "expected 1.0, got {m}");
         }
@@ -343,14 +346,14 @@ mod tests {
 
     #[test]
     fn biquad_response_output_lengths_match() {
-        let c = BiquadCoeffs {
+        let coeffs = BiquadCoeffs {
             b0: 1.0,
             b1: 0.0,
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
         };
-        let resp = c.frequency_response(128, 48000.0).unwrap();
+        let resp = coeffs.frequency_response(128, 48000.0).unwrap();
         assert_eq!(resp.frequencies.len(), 128);
         assert_eq!(resp.magnitudes.len(), 128);
         assert_eq!(resp.phases.len(), 128);
@@ -358,40 +361,40 @@ mod tests {
 
     #[test]
     fn biquad_dc_frequency_is_zero() {
-        let c = BiquadCoeffs {
+        let coeffs = BiquadCoeffs {
             b0: 1.0,
             b1: 0.0,
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
         };
-        let resp = c.frequency_response(64, 44100.0).unwrap();
+        let resp = coeffs.frequency_response(64, 44100.0).unwrap();
         assert!((resp.frequencies[0]).abs() < 1e-6);
     }
 
     #[test]
     fn biquad_nyquist_frequency_matches_sample_rate() {
-        let c = BiquadCoeffs {
+        let coeffs = BiquadCoeffs {
             b0: 1.0,
             b1: 0.0,
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
         };
-        let resp = c.frequency_response(64, 44100.0).unwrap();
+        let resp = coeffs.frequency_response(64, 44100.0).unwrap();
         assert!((resp.frequencies[63] - 22050.0).abs() < 1.0);
     }
 
     #[test]
     fn magnitudes_db_floor_at_minus120() {
-        let c = BiquadCoeffs {
+        let coeffs = BiquadCoeffs {
             b0: 0.0,
             b1: 0.0,
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
         };
-        let resp = c.frequency_response(16, 44100.0).unwrap();
+        let resp = coeffs.frequency_response(16, 44100.0).unwrap();
         for &d in &resp.magnitudes_db() {
             assert!(d >= -120.0, "dB floor violated: {d}");
         }
