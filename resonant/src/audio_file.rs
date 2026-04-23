@@ -17,6 +17,7 @@ use resonant_analysis::chroma::ChromaExtractor;
 use resonant_analysis::key::KeyDetector;
 use resonant_analysis::loudness::LoudnessAnalyser;
 use resonant_analysis::lufs::LufsAnalyser;
+use resonant_analysis::mfcc::MfccExtractor;
 use resonant_analysis::onset::OnsetDetector;
 use resonant_analysis::tempo::TempoEstimator;
 use resonant_core::signal::Signal;
@@ -377,6 +378,13 @@ impl AudioFile {
         let peak_db = loudness_analyser.peak_db(mono);
         let rms_db = loudness_analyser.rms_db(mono);
 
+        // MFCCs
+        let mut mfcc_extractor = MfccExtractor::new(sr);
+        if let Some(window_size) = analysis_window {
+            mfcc_extractor = mfcc_extractor.with_window_size(window_size);
+        }
+        let mfcc = mfcc_extractor.extract(mono).unwrap_or_default();
+
         Ok(AnalysisResult {
             bpm,
             bpm_confidence: tempo.confidence,
@@ -385,6 +393,7 @@ impl AudioFile {
             loudness_lufs,
             peak_db,
             rms_db,
+            mfcc,
         })
     }
 }
@@ -918,6 +927,32 @@ mod tests {
                 (diff - 6.0).abs() < 1.0,
                 "expected ~6 LU between full-stereo and L-only, got {diff:.2} LU"
             );
+        }
+    }
+
+    #[test]
+    fn analyse_returns_mfcc_frames_with_13_coefficients() {
+        use std::f32::consts::PI;
+        let sample_rate = 44100_u32;
+        let sr = sample_rate as f32;
+        let n = (sr * 2.0) as usize;
+        let samples: Vec<f32> = (0..n)
+            .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
+            .collect();
+
+        let audio = AudioFile::from_samples(samples, sample_rate, 1);
+        let result = audio.analyse();
+        assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
+        if let Ok(r) = result {
+            assert!(!r.mfcc.is_empty(), "expected MFCC frames, got none");
+            for frame in &r.mfcc {
+                assert_eq!(
+                    frame.coefficients.len(),
+                    13,
+                    "expected 13 coefficients per frame, got {}",
+                    frame.coefficients.len()
+                );
+            }
         }
     }
 
