@@ -3,6 +3,42 @@
 use resonant_analysis::key::KeyEstimate;
 use resonant_analysis::mfcc::MfccFrame;
 
+/// Bitmask controlling which algorithms [`AudioFile::analyse_with()`](crate::AudioFile::analyse_with) runs.
+///
+/// Combine flags with `|`: `AnalysisFlags::TEMPO | AnalysisFlags::LOUDNESS`.
+/// Use [`AnalysisFlags::ALL`] to run every algorithm (equivalent to [`AudioFile::analyse()`](crate::AudioFile::analyse)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AnalysisFlags(u32);
+
+impl AnalysisFlags {
+    /// Estimate tempo (BPM and confidence).
+    pub const TEMPO: Self = Self(1 << 0);
+    /// Detect onset timestamps.
+    pub const ONSETS: Self = Self(1 << 1);
+    /// Estimate musical key via chroma.
+    pub const KEY: Self = Self(1 << 2);
+    /// Compute integrated loudness (LUFS), peak, and RMS levels.
+    pub const LOUDNESS: Self = Self(1 << 3);
+    /// Extract MFCC frames.
+    pub const MFCC: Self = Self(1 << 4);
+    /// Run all algorithms. Equivalent to calling [`AudioFile::analyse()`](crate::AudioFile::analyse).
+    pub const ALL: Self = Self(0b1_1111);
+
+    /// Returns `true` if all bits of `other` are set in `self`.
+    #[inline]
+    #[must_use]
+    pub fn contains(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+impl std::ops::BitOr for AnalysisFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
 /// Summary returned by [`AudioFile::analyse()`](crate::AudioFile::analyse).
 ///
 /// All fields are computed in a single pass over the mono signal.
@@ -20,7 +56,7 @@ use resonant_analysis::mfcc::MfccFrame;
 ///     println!("Key: {} {}", key.tonic.name(), if key.mode == resonant::Mode::Major { "major" } else { "minor" });
 /// }
 /// println!("Loudness: {:?} LUFS", result.loudness_lufs);
-/// println!("Peak: {:.1} dBFS  RMS: {:.1} dBFS", result.peak_db, result.rms_db);
+/// println!("Peak: {:?} dBFS  RMS: {:?} dBFS", result.peak_db, result.rms_db);
 /// ```
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -38,10 +74,10 @@ pub struct AnalysisResult {
     /// `None` if the signal is too short for gating, or the sample rate is not
     /// supported by the K-weighting filter (supported: 44100, 48000, 88200, 96000 Hz).
     pub loudness_lufs: Option<f32>,
-    /// Peak level in dBFS. −120.0 for silence.
-    pub peak_db: f32,
-    /// RMS level in dBFS. −120.0 for silence.
-    pub rms_db: f32,
+    /// Peak level in dBFS. `None` if [`AnalysisFlags::LOUDNESS`] was not requested.
+    pub peak_db: Option<f32>,
+    /// RMS level in dBFS. `None` if [`AnalysisFlags::LOUDNESS`] was not requested.
+    pub rms_db: Option<f32>,
     /// MFCC frames (one per STFT hop). Empty if the signal is too short.
     pub mfcc: Vec<MfccFrame>,
 }
@@ -63,13 +99,14 @@ mod tests {
             }),
             onsets: vec![0.1, 0.6, 1.1],
             loudness_lufs: Some(-14.0),
-            peak_db: -0.1,
-            rms_db: -18.0,
+            peak_db: Some(-0.1),
+            rms_db: Some(-18.0),
             mfcc: vec![],
         };
         assert_eq!(r.bpm, Some(120.0));
         assert_eq!(r.onsets.len(), 3);
         assert!(r.key.is_some());
+        assert_eq!(r.peak_db, Some(-0.1));
     }
 
     #[cfg(feature = "serde")]
@@ -81,8 +118,8 @@ mod tests {
             key: None,
             onsets: vec![0.1, 0.5],
             loudness_lufs: Some(-14.0),
-            peak_db: -0.1,
-            rms_db: -18.0,
+            peak_db: Some(-0.1),
+            rms_db: Some(-18.0),
             mfcc: vec![],
         };
         let json =
