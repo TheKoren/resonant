@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn analysis_result_fields_accessible() {
-        let r = AnalysisResult {
+        let result = AnalysisResult {
             bpm: Some(120.0),
             bpm_confidence: 0.85,
             key: Some(KeyEstimate {
@@ -103,16 +103,16 @@ mod tests {
             rms_db: Some(-18.0),
             mfcc: vec![],
         };
-        assert_eq!(r.bpm, Some(120.0));
-        assert_eq!(r.onsets.len(), 3);
-        assert!(r.key.is_some());
-        assert_eq!(r.peak_db, Some(-0.1));
+        assert_eq!(result.bpm, Some(120.0));
+        assert_eq!(result.onsets.len(), 3);
+        assert!(result.key.is_some());
+        assert_eq!(result.peak_db, Some(-0.1));
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn analysis_result_serde_roundtrip() {
-        let r = AnalysisResult {
+        let result = AnalysisResult {
             bpm: Some(120.0),
             bpm_confidence: 0.85,
             key: None,
@@ -122,12 +122,12 @@ mod tests {
             rms_db: Some(-18.0),
             mfcc: vec![],
         };
-        let json =
-            serde_json::to_string(&r).unwrap_or_else(|e| panic!("serialize AnalysisResult: {e}"));
+        let json = serde_json::to_string(&result)
+            .unwrap_or_else(|e| panic!("serialize AnalysisResult: {e}"));
         let back: AnalysisResult = serde_json::from_str(&json)
             .unwrap_or_else(|e| panic!("deserialize AnalysisResult: {e}"));
-        assert_eq!(back.bpm, r.bpm);
-        assert_eq!(back.onsets, r.onsets);
+        assert_eq!(back.bpm, result.bpm);
+        assert_eq!(back.onsets, result.onsets);
         assert!(back.key.is_none());
     }
 }
