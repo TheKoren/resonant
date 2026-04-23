@@ -70,5 +70,8 @@ pub use resonant_analysis::AnalysisError;
 /// Musical key types returned in [`AnalysisResult`].
 pub use resonant_analysis::{KeyEstimate, Mode, PitchClass};
 
+/// MFCC frame returned in [`AnalysisResult::mfcc`].
+pub use resonant_analysis::mfcc::MfccFrame;
+
 /// High-level analysis modules.
 pub use resonant_analysis::{chroma, mfcc, onset, pitch, spectral, tempo};

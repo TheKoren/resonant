@@ -1,6 +1,7 @@
 //! High-level analysis result returned by [`AudioFile::analyse()`](crate::AudioFile::analyse).
 
 use resonant_analysis::key::KeyEstimate;
+use resonant_analysis::mfcc::MfccFrame;
 
 /// Summary returned by [`AudioFile::analyse()`](crate::AudioFile::analyse).
 ///
@@ -41,6 +42,8 @@ pub struct AnalysisResult {
     pub peak_db: f32,
     /// RMS level in dBFS. −120.0 for silence.
     pub rms_db: f32,
+    /// MFCC frames (one per STFT hop). Empty if the signal is too short.
+    pub mfcc: Vec<MfccFrame>,
 }
 
 #[cfg(test)]
@@ -62,6 +65,7 @@ mod tests {
             loudness_lufs: Some(-14.0),
             peak_db: -0.1,
             rms_db: -18.0,
+            mfcc: vec![],
         };
         assert_eq!(r.bpm, Some(120.0));
         assert_eq!(r.onsets.len(), 3);
@@ -79,6 +83,7 @@ mod tests {
             loudness_lufs: Some(-14.0),
             peak_db: -0.1,
             rms_db: -18.0,
+            mfcc: vec![],
         };
         let json =
             serde_json::to_string(&r).unwrap_or_else(|e| panic!("serialize AnalysisResult: {e}"));
