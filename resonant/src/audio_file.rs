@@ -375,7 +375,7 @@ impl AudioFile {
             onset_detector
                 .detect(mono)?
                 .into_iter()
-                .map(|o| o.time_secs)
+                .map(|onset| onset.time_secs)
                 .collect()
         } else {
             vec![]
@@ -390,7 +390,7 @@ impl AudioFile {
             let chroma = chroma_extractor.extract(mono)?;
             KeyDetector::new()
                 .detect(&chroma)
-                .filter(|k| k.confidence > 0.3)
+                .filter(|key_estimate| key_estimate.confidence > 0.3)
         } else {
             None
         };
@@ -466,7 +466,7 @@ impl Iterator for FftFrameIter<'_> {
         // FFT
         let signal = Signal::from_samples(windowed);
         let freq = match signal.fft() {
-            Ok(f) => f,
+            Ok(freq_signal) => freq_signal,
             Err(e) => return Some(Err(e.into())),
         };
 
@@ -547,10 +547,10 @@ mod tests {
     #[test]
     fn duration_reasonable() {
         if let Ok(audio) = AudioFile::open("../assets/test.wav") {
-            let dur = audio.duration_secs();
+            let duration_secs = audio.duration_secs();
             // test.wav is ~590KB at 44100 Hz mono 16-bit = ~6.7s
-            assert!(dur > 1.0, "Duration too short: {dur}");
-            assert!(dur < 30.0, "Duration too long: {dur}");
+            assert!(duration_secs > 1.0, "Duration too short: {duration_secs}");
+            assert!(duration_secs < 30.0, "Duration too long: {duration_secs}");
         }
     }
 
@@ -560,9 +560,9 @@ mod tests {
             let bins = audio.fft();
             assert!(bins.is_ok(), "FFT failed: {:?}", bins.err());
             let bins = bins.ok();
-            let n = audio.num_frames();
-            let expected_bins = n / 2 + 1;
-            assert_eq!(bins.as_ref().map(|b| b.len()), Some(expected_bins));
+            let num_frames = audio.num_frames();
+            let expected_bins = num_frames / 2 + 1;
+            assert_eq!(bins.as_ref().map(|bin_vec| bin_vec.len()), Some(expected_bins));
         }
     }
 
@@ -583,7 +583,7 @@ mod tests {
                 assert!((bins[0].frequency_hz).abs() < 1e-6);
                 // Last bin is near Nyquist
                 let nyquist = audio.sample_rate() as f32 / 2.0;
-                let last_freq = bins.last().map(|b| b.frequency_hz).unwrap_or(0.0);
+                let last_freq = bins.last().map(|bin| bin.frequency_hz).unwrap_or(0.0);
                 assert!(
                     (last_freq - nyquist).abs() < nyquist * 0.01,
                     "Last bin {last_freq} Hz not near Nyquist {nyquist} Hz"
@@ -596,9 +596,9 @@ mod tests {
     fn fft_known_sine() {
         // Synthesise a 1 kHz sine at 44100 Hz, power-of-two length
         let sample_rate = 44100_u32;
-        let n = 4096_usize;
+        let num_samples = 4096_usize;
         let freq_hz = 1000.0_f32;
-        let mut samples = vec![0.0_f32; n];
+        let mut samples = vec![0.0_f32; num_samples];
         for (i, s) in samples.iter_mut().enumerate() {
             *s = (2.0 * std::f32::consts::PI * freq_hz * i as f32 / sample_rate as f32).sin();
         }
@@ -614,7 +614,7 @@ mod tests {
         let bins = audio.fft().ok();
         let bins = bins.as_ref();
         assert!(bins.is_some());
-        let bins = bins.as_ref().map(|b| b.as_slice());
+        let bins = bins.as_ref().map(|bin_vec| bin_vec.as_slice());
 
         // Find the peak bin
         if let Some(bins) = bins {
@@ -626,7 +626,7 @@ mod tests {
 
             if let Some((_, peak_bin)) = peak {
                 // Peak should be near 1000 Hz (within one bin width)
-                let bin_width = sample_rate as f32 / n as f32;
+                let bin_width = sample_rate as f32 / num_samples as f32;
                 assert!(
                     (peak_bin.frequency_hz - freq_hz).abs() < bin_width * 2.0,
                     "Peak at {} Hz, expected near {} Hz",
@@ -653,8 +653,8 @@ mod tests {
 
     // --- Builder tests ---
 
-    fn make_sine(n: usize, freq_hz: f32, sample_rate: u32) -> AudioFile {
-        let mut samples = vec![0.0_f32; n];
+    fn make_sine(num_samples: usize, freq_hz: f32, sample_rate: u32) -> AudioFile {
+        let mut samples = vec![0.0_f32; num_samples];
         for (i, s) in samples.iter_mut().enumerate() {
             *s = (2.0 * std::f32::consts::PI * freq_hz * i as f32 / sample_rate as f32).sin();
         }
@@ -696,12 +696,12 @@ mod tests {
 
         if let (Ok(lin), Ok(db)) = (linear_bins, db_bins) {
             // dB values should be 20*log10 of linear values
-            for (l, d) in lin.iter().zip(db.iter()) {
-                let expected_db = 20.0 * l.magnitude.max(f32::MIN_POSITIVE).log10();
+            for (linear_bin, db_bin) in lin.iter().zip(db.iter()) {
+                let expected_db = 20.0 * linear_bin.magnitude.max(f32::MIN_POSITIVE).log10();
                 assert!(
-                    (d.magnitude - expected_db).abs() < 1e-4,
+                    (db_bin.magnitude - expected_db).abs() < 1e-4,
                     "dB mismatch: got {}, expected {}",
-                    d.magnitude,
+                    db_bin.magnitude,
                     expected_db
                 );
             }
@@ -720,9 +720,9 @@ mod tests {
         assert!(bins_rect.is_ok());
 
         // Rectangular window should produce different magnitudes than Hann
-        if let (Ok(h), Ok(r)) = (bins_hann, bins_rect) {
-            let hann_peak: f32 = h.iter().map(|b| b.magnitude).fold(0.0, f32::max);
-            let rect_peak: f32 = r.iter().map(|b| b.magnitude).fold(0.0, f32::max);
+        if let (Ok(hann_bins), Ok(rect_bins)) = (bins_hann, bins_rect) {
+            let hann_peak: f32 = hann_bins.iter().map(|bin| bin.magnitude).fold(0.0, f32::max);
+            let rect_peak: f32 = rect_bins.iter().map(|bin| bin.magnitude).fold(0.0, f32::max);
             // Rectangular window preserves more energy at the peak
             assert!(
                 rect_peak > hann_peak,
@@ -761,7 +761,7 @@ mod tests {
         assert!(iter.is_ok());
         let iter = iter.ok();
         let frames: Vec<_> = iter.into_iter().flatten().collect();
-        let ok_frames: Vec<_> = frames.into_iter().filter_map(|r| r.ok()).collect();
+        let ok_frames: Vec<_> = frames.into_iter().filter_map(|frame_result| frame_result.ok()).collect();
         assert_eq!(ok_frames.len(), 15);
     }
 
@@ -863,20 +863,20 @@ mod tests {
         let result = audio.analyse();
         assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
 
-        let r = result.ok();
-        let r = r.as_ref();
+        let analysis_opt = result.ok();
+        let analysis_opt = analysis_opt.as_ref();
 
         // bpm_confidence in [0, 1]
-        assert!(r.map_or(false, |r| r.bpm_confidence >= 0.0
-            && r.bpm_confidence <= 1.0));
+        assert!(analysis_opt.map_or(false, |analysis| analysis.bpm_confidence >= 0.0
+            && analysis.bpm_confidence <= 1.0));
 
         // Peak near 0 dBFS — each burst is a full-scale sine
-        assert!(r.map_or(false, |r| r.peak_db.map_or(false, |p| p > -3.0)));
+        assert!(analysis_opt.map_or(false, |analysis| analysis.peak_db.map_or(false, |peak| peak > -3.0)));
 
         // RMS is well below peak because the signal is sparse click bursts
-        assert!(r.map_or(false, |r| {
-            let rms = r.rms_db.unwrap_or(-120.0);
-            let peak = r.peak_db.unwrap_or(-120.0);
+        assert!(analysis_opt.map_or(false, |analysis| {
+            let rms = analysis.rms_db.unwrap_or(-120.0);
+            let peak = analysis.peak_db.unwrap_or(-120.0);
             rms > -120.0 && rms < peak
         }));
     }
@@ -891,11 +891,11 @@ mod tests {
             "analyse() on silence failed: {:?}",
             result.err()
         );
-        if let Ok(r) = result {
+        if let Ok(analysis) = result {
             // Silence → no BPM
-            assert!(r.bpm.is_none());
+            assert!(analysis.bpm.is_none());
             // Peak and RMS at floor
-            assert!(r.peak_db.map_or(false, |p| (p - (-120.0)).abs() < 1.0));
+            assert!(analysis.peak_db.map_or(false, |peak| (peak - (-120.0)).abs() < 1.0));
         }
     }
 
@@ -908,9 +908,9 @@ mod tests {
                 "analyse() on test.wav failed: {:?}",
                 result.err()
             );
-            if let Ok(r) = &result {
-                assert!(r.bpm_confidence >= 0.0 && r.bpm_confidence <= 1.0);
-                assert!(r.peak_db.map_or(true, |p| p <= 0.1)); // dBFS ≤ 0 for normalised audio
+            if let Ok(analysis) = &result {
+                assert!(analysis.bpm_confidence >= 0.0 && analysis.bpm_confidence <= 1.0);
+                assert!(analysis.peak_db.map_or(true, |peak| peak <= 0.1)); // dBFS ≤ 0 for normalised audio
             }
         }
     }
@@ -937,20 +937,20 @@ mod tests {
         use std::f32::consts::PI;
         let sample_rate = 44100_u32;
         let sr = sample_rate as f32;
-        let n = (sr * 3.0) as usize; // 3 seconds — enough for LUFS gating
+        let num_samples = (sr * 3.0) as usize; // 3 seconds — enough for LUFS gating
 
-        let sine: Vec<f32> = (0..n)
+        let sine: Vec<f32> = (0..num_samples)
             .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
             .collect();
 
         // Interleaved stereo: L=sine, R=sine
-        let mut both = Vec::with_capacity(n * 2);
+        let mut both = Vec::with_capacity(num_samples * 2);
         for &s in &sine {
             both.push(s);
             both.push(s);
         }
         // Interleaved stereo: L=sine, R=silent
-        let mut left_only = Vec::with_capacity(n * 2);
+        let mut left_only = Vec::with_capacity(num_samples * 2);
         for &s in &sine {
             left_only.push(s);
             left_only.push(0.0_f32);
@@ -959,14 +959,14 @@ mod tests {
         let af_both = AudioFile::from_samples(both, sample_rate, 2);
         let af_left = AudioFile::from_samples(left_only, sample_rate, 2);
 
-        let lufs_both = af_both.analyse().ok().and_then(|r| r.loudness_lufs);
-        let lufs_left = af_left.analyse().ok().and_then(|r| r.loudness_lufs);
+        let lufs_both = af_both.analyse().ok().and_then(|analysis| analysis.loudness_lufs);
+        let lufs_left = af_left.analyse().ok().and_then(|analysis| analysis.loudness_lufs);
 
-        if let (Some(lb), Some(ll)) = (lufs_both, lufs_left) {
-            let diff = lb - ll;
+        if let (Some(lufs_full_stereo), Some(lufs_left_only)) = (lufs_both, lufs_left) {
+            let lufs_diff = lufs_full_stereo - lufs_left_only;
             assert!(
-                (diff - 6.0).abs() < 1.0,
-                "expected ~6 LU between full-stereo and L-only, got {diff:.2} LU"
+                (lufs_diff - 6.0).abs() < 1.0,
+                "expected ~6 LU between full-stereo and L-only, got {lufs_diff:.2} LU"
             );
         }
     }
@@ -976,17 +976,17 @@ mod tests {
         use std::f32::consts::PI;
         let sample_rate = 44100_u32;
         let sr = sample_rate as f32;
-        let n = (sr * 2.0) as usize;
-        let samples: Vec<f32> = (0..n)
+        let num_samples = (sr * 2.0) as usize;
+        let samples: Vec<f32> = (0..num_samples)
             .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
             .collect();
 
         let audio = AudioFile::from_samples(samples, sample_rate, 1);
         let result = audio.analyse();
         assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
-        if let Ok(r) = result {
-            assert!(!r.mfcc.is_empty(), "expected MFCC frames, got none");
-            for frame in &r.mfcc {
+        if let Ok(analysis) = result {
+            assert!(!analysis.mfcc.is_empty(), "expected MFCC frames, got none");
+            for frame in &analysis.mfcc {
                 assert_eq!(
                     frame.coefficients.len(),
                     13,
@@ -1002,22 +1002,22 @@ mod tests {
         use std::f32::consts::PI;
         let sample_rate = 44100_u32;
         let sr = sample_rate as f32;
-        let n = (sr * 3.0) as usize;
-        let samples: Vec<f32> = (0..n)
+        let num_samples = (sr * 3.0) as usize;
+        let samples: Vec<f32> = (0..num_samples)
             .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
             .collect();
 
         let audio = AudioFile::from_samples(samples, sample_rate, 1);
         let result = audio.analyse_with(AnalysisFlags::LOUDNESS);
         assert!(result.is_ok(), "analyse_with failed: {:?}", result.err());
-        if let Ok(r) = result {
-            assert_eq!(r.bpm_confidence, 0.0);
-            assert!(r.bpm.is_none());
-            assert!(r.onsets.is_empty());
-            assert!(r.mfcc.is_empty());
-            assert!(r.loudness_lufs.is_some());
-            assert!(r.peak_db.is_some());
-            assert!(r.rms_db.is_some());
+        if let Ok(analysis) = result {
+            assert_eq!(analysis.bpm_confidence, 0.0);
+            assert!(analysis.bpm.is_none());
+            assert!(analysis.onsets.is_empty());
+            assert!(analysis.mfcc.is_empty());
+            assert!(analysis.loudness_lufs.is_some());
+            assert!(analysis.peak_db.is_some());
+            assert!(analysis.rms_db.is_some());
         }
     }
 
@@ -1042,13 +1042,13 @@ mod tests {
         let audio = AudioFile::from_samples(samples, sample_rate, 1);
         let result = audio.analyse_with(AnalysisFlags::TEMPO | AnalysisFlags::ONSETS);
         assert!(result.is_ok(), "analyse_with failed: {:?}", result.err());
-        if let Ok(r) = result {
-            assert!(!r.onsets.is_empty());
-            assert!(r.loudness_lufs.is_none());
-            assert!(r.peak_db.is_none());
-            assert!(r.rms_db.is_none());
-            assert!(r.key.is_none());
-            assert!(r.mfcc.is_empty());
+        if let Ok(analysis) = result {
+            assert!(!analysis.onsets.is_empty());
+            assert!(analysis.loudness_lufs.is_none());
+            assert!(analysis.peak_db.is_none());
+            assert!(analysis.rms_db.is_none());
+            assert!(analysis.key.is_none());
+            assert!(analysis.mfcc.is_empty());
         }
     }
 
@@ -1057,8 +1057,8 @@ mod tests {
         use std::f32::consts::PI;
         let sample_rate = 44100_u32;
         let sr = sample_rate as f32;
-        let n = (sr * 2.0) as usize;
-        let samples: Vec<f32> = (0..n)
+        let num_samples = (sr * 2.0) as usize;
+        let samples: Vec<f32> = (0..num_samples)
             .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
             .collect();
 
@@ -1068,14 +1068,14 @@ mod tests {
 
         assert!(result_a.is_ok());
         assert!(result_b.is_ok());
-        if let (Ok(a), Ok(b)) = (result_a, result_b) {
-            assert_eq!(a.bpm, b.bpm);
-            assert_eq!(a.bpm_confidence, b.bpm_confidence);
-            assert_eq!(a.onsets, b.onsets);
-            assert_eq!(a.loudness_lufs, b.loudness_lufs);
-            assert_eq!(a.peak_db, b.peak_db);
-            assert_eq!(a.rms_db, b.rms_db);
-            assert_eq!(a.mfcc, b.mfcc);
+        if let (Ok(from_analyse), Ok(from_analyse_with)) = (result_a, result_b) {
+            assert_eq!(from_analyse.bpm, from_analyse_with.bpm);
+            assert_eq!(from_analyse.bpm_confidence, from_analyse_with.bpm_confidence);
+            assert_eq!(from_analyse.onsets, from_analyse_with.onsets);
+            assert_eq!(from_analyse.loudness_lufs, from_analyse_with.loudness_lufs);
+            assert_eq!(from_analyse.peak_db, from_analyse_with.peak_db);
+            assert_eq!(from_analyse.rms_db, from_analyse_with.rms_db);
+            assert_eq!(from_analyse.mfcc, from_analyse_with.mfcc);
         }
     }
 
@@ -1092,7 +1092,7 @@ mod tests {
         // analyse() with a 2048-point window
         let result = audio.clone().with_analysis_window(2048).analyse();
         assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
-        let facade_bpm_conf = result.ok().map(|r| r.bpm_confidence).unwrap_or(-1.0);
+        let facade_bpm_conf = result.ok().map(|analysis| analysis.bpm_confidence).unwrap_or(-1.0);
 
         // Manually construct the same TempoEstimator that analyse() should use
         let manual_conf = TempoEstimator::new(sr)
