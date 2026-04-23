@@ -1,6 +1,8 @@
 # DSP Concepts for Rust Developers
 
 > This document explains the signal processing concepts used in the resonant library.
+>
+> **Note:** AI was used to create these texts. 
 
 ---
 
@@ -25,7 +27,7 @@
 ### What is windowing?
 
 When we analyse a chunk of audio, we're slicing a continuous signal into a finite block.
-The edges of that block create artificial discontinuities — the signal doesn't naturally
+The edges of that block create artificial discontinuities as the signal doesn't naturally
 start and stop at our chunk boundaries. These discontinuities cause **spectral leakage**:
 energy smears across frequency bins in the FFT output, making it harder to identify the
 true frequencies present.
@@ -45,7 +47,7 @@ A **window function** tapers the signal smoothly to zero at both ends, reducing 
 ### The trade-off
 
 There is always a trade-off between **frequency resolution** (narrow main lobe) and
-**spectral leakage** (low side lobes). No window is universally best — choose based on
+**spectral leakage** (low side lobes). No window is universally best, so choose based on
 what matters for your application.
 
 ### Code example
@@ -65,7 +67,7 @@ the [`Sample`](https://docs.rs/resonant-core) trait and work equally on `f32`, `
 require no changes.
 
 `window::apply` is a separate SIMD-accelerated function for the common case of
-repeatedly applying a precomputed `f32` window — it skips the cosine computation.
+repeatedly applying a precomputed `f32` window (it skips the cosine computation).
 
 ```rust
 use resonant_core::{window, fixed::Q15};
@@ -99,7 +101,7 @@ Given N samples of audio, the FFT produces N/2+1 complex values, each representi
 amplitude and phase of a specific frequency.
 
 The naive Discrete Fourier Transform (DFT) requires O(N²) operations. The Fast Fourier
-Transform (FFT) computes the same result in O(N log N) — making real-time audio analysis
+Transform (FFT) computes the same result in O(N log N): making real-time audio analysis
 practical.
 
 ### Frequency bins
@@ -116,7 +118,7 @@ Where:
 - `N` is the FFT size (number of input samples)
 
 Bin 0 is the DC component (average value). Bin N/2 is the Nyquist frequency (half the
-sample rate) — the highest frequency that can be represented.
+sample rate): the highest frequency that can be represented.
 
 ### Type-state safety in resonant
 
@@ -139,7 +141,7 @@ This prevents an entire class of bugs at compile time.
 ### Conjugate symmetry of real inputs
 
 When the input to an FFT is purely real (no imaginary part), the output is not
-arbitrary — it has **conjugate symmetry**:
+arbitrary: it has **conjugate symmetry**:
 
 ```
 X[k] = conj(X[N - k])
@@ -150,7 +152,7 @@ conjugate of the other). Half the FFT output is redundant. The real-valued FFT (
 exploits this to return only the **unique** bins: indices 0 through N/2, giving
 **N/2 + 1** complex values instead of N.
 
-All audio signals are real — there is no physical interpretation of an imaginary
+All audio signals are real: there is no physical interpretation of an imaginary
 sample value. Using `rfft` instead of the full complex FFT gives roughly:
 
 - **~40% lower CPU** — the transform works on half the data internally
@@ -173,10 +175,10 @@ the conjugate mirror and are not returned.
 
 | Situation | Use |
 |---|---|
-| Audio analysis, spectral features, STFT frames | `rfft` — input is always real |
+| Audio analysis, spectral features, STFT frames | `rfft`: input is always real |
 | Signal has a complex component (e.g. analytic signal after Hilbert) | `fft` |
 | You need the full complex spectrum for convolution in frequency domain | `rfft` (the product of two rfft outputs is their circular convolution) |
-| Computing on non-power-of-two lengths with the `rustfft` backend | `fft` — rfft is radix-2 only in the no-alloc path |
+| Computing on non-power-of-two lengths with the `rustfft` backend | `fft`: rfft is radix-2 only in the no-alloc path |
 
 ### Code example
 
@@ -226,7 +228,7 @@ rfft(&input, &mut out).unwrap();
 
 ## Short-Time Fourier Transform (STFT)
 
-The FFT gives you the frequency content of an entire signal — but not *when* those
+The FFT gives you the frequency content of an entire signal, but not *when* those
 frequencies occur. The STFT solves this by applying the FFT to overlapping windows
 of the signal, producing a **spectrogram**: a 2D representation of frequency vs. time.
 
@@ -246,7 +248,7 @@ of the signal, producing a **spectrogram**: a 2D representation of frequency vs.
 
 ### The time-frequency trade-off
 
-You cannot have perfect resolution in both time and frequency simultaneously — this
+You cannot have perfect resolution in both time and frequency simultaneously: this
 is the **uncertainty principle** of signal processing.
 
 | Window size | Frequency resolution | Time resolution |
@@ -289,7 +291,7 @@ let reconstructed = stft.synthesize(&frames, original_length).unwrap();
 ### Why fixed-point?
 
 Many microcontrollers (Cortex-M0, M3, most RISC-V cores) have no floating-point
-unit (FPU). On these targets every `f32` operation is emulated in software —
+unit (FPU). On these targets every `f32` operation is emulated in software, which are
 slow, unpredictable, and power-hungry. Fixed-point arithmetic uses plain integers
 with an implicit scaling factor, giving deterministic performance and
 bit-exact results across platforms.
@@ -322,7 +324,7 @@ In audio DSP, wrapping overflow produces harsh clicks and distortion. Hardware
 DSP chips use **saturating arithmetic**: when a result exceeds the representable
 range, it clamps to the maximum (or minimum) value instead of wrapping around.
 
-resonant-core's `Q15` and `Q31` types follow this convention — all arithmetic
+resonant-core's `Q15` and `Q31` types follow this convention: all arithmetic
 methods are named `saturating_*` to make the behaviour explicit:
 
 ```rust
@@ -354,7 +356,7 @@ The same logic applies to Q31 using a 64-bit intermediate with a right-shift of 
 | **Speed** | Faster on 16-bit MCUs | Faster on 32-bit MCUs |
 | **Use case** | Telephony, simple filters, Cortex-M0 | High-fidelity audio, Cortex-M4/M7 |
 
-If you are targeting a 32-bit MCU, prefer Q31 — the extra precision costs nothing
+If you are targeting a 32-bit MCU, prefer Q31 as the extra precision costs nothing
 on a 32-bit data path. Use Q15 when memory bandwidth or storage is the bottleneck
 (e.g. large delay buffers on a 16-bit target).
 
@@ -377,15 +379,14 @@ let back: f64 = q31.to_f64();
 assert!((back - 0.123456789).abs() < 1e-7);
 ```
 
-Values outside \[−1.0, 1.0) are clamped automatically — no panics, no undefined
-behaviour.
+Values outside \[−1.0, 1.0) are clamped automatically.
 
 ---
 
 ## Filters
 
 A **digital filter** modifies a signal by attenuating or amplifying certain frequencies.
-Filters are the workhorses of audio DSP — equalizers, crossovers, anti-alias stages, and
+Filters are the workhorses of audio DSP: equalizers, crossovers, anti-alias stages, and
 effects like wah-wah are all built from filters.
 
 ### FIR vs IIR
@@ -406,7 +407,7 @@ response shape (e.g. a matched filter or a Hilbert transformer).
 
 ### The biquad filter
 
-The **biquad** (bi-quadratic) is a second-order IIR filter — the most common building
+The **biquad** (bi-quadratic) is a second-order IIR filter, the most common building
 block in audio processing. It has five coefficients:
 
 ```
@@ -425,7 +426,7 @@ s1   = b1·x[n] - a1·y[n] + s2
 s2   = b2·x[n] - a2·y[n]
 ```
 
-Here `s1` and `s2` are the filter's internal state — just two numbers that capture the
+Here `s1` and `s2` are the filter's internal state; just two numbers that capture the
 filter's "memory" of past samples.
 
 ### Why direct form II transposed?
@@ -447,8 +448,7 @@ resonant's `decimate()` function uses for anti-aliasing.
 
 ### Butterworth design
 
-The **Butterworth filter** has the flattest possible magnitude response in the passband —
-no ripples. At the cutoff frequency, the gain is exactly −3 dB (≈ 0.707 amplitude).
+The **Butterworth filter** has the flattest possible magnitude response in the passband (no ripples). At the cutoff frequency, the gain is exactly −3 dB (≈ 0.707 amplitude).
 
 resonant computes Butterworth coefficients using the **bilinear transform**: a mapping
 from the analog (continuous-time) filter design to the digital (discrete-time) domain.
@@ -491,7 +491,7 @@ y[n] = h[0]·x[n] + h[1]·x[n-1] + ... + h[N-1]·x[n-N+1]
 ```
 
 The weights `h[0..N]` are called the filter **coefficients** or **taps**. The FIR's
-impulse response *is* the coefficient vector — feed in a single `1.0` followed by
+impulse response *is* the coefficient vector - feed in a single `1.0` followed by
 zeros, and you get the coefficients back out.
 
 resonant's `Fir` struct uses a circular delay line internally, avoiding the need to
@@ -500,7 +500,7 @@ shift the entire buffer each sample.
 ### Decimation (sample-rate reduction)
 
 **Decimation** reduces the sample rate by an integer factor *M*: keep every M-th sample,
-discard the rest. But you can't just throw samples away — the original signal may
+discard the rest. But you can't just throw samples away as the original signal may
 contain frequencies above the new Nyquist limit (half the new sample rate), which would
 fold back as **aliasing** artifacts.
 
@@ -528,11 +528,10 @@ let output = resample::decimate(&input, 3, 48000.0).unwrap();
 
 A linear filter obeys superposition: `filter(a + b) = filter(a) + filter(b)`. This is
 mathematically clean, but it means a linear filter can only attenuate or amplify
-frequencies — it cannot create new ones.
+frequencies and thus it cannot create new ones.
 
 Real analog circuits, magnetic tape, and vacuum tubes are *nonlinear*. When audio is
-pushed hard through them, the output contains **harmonics** — frequencies that were not
-present in the input. A pure 440 Hz sine through a driven tube amplifier produces energy
+pushed hard through them, the output contains **harmonics** which are frequencies that were not present in the input. A pure 440 Hz sine through a driven tube amplifier produces energy
 at 880 Hz, 1320 Hz, and so on. This harmonic saturation is the sound of "warmth" and
 "character" that musicians seek.
 
@@ -582,8 +581,7 @@ assert!(y.abs() <= 1.0 + 1e-4);
 
 The **Moog ladder** is a 4th-order resonant lowpass designed to model the transistor
 ladder circuit in the Minimoog synthesizer. It produces a distinctively warm, musical
-lowpass that self-oscillates at high resonance — a feature with no equivalent in linear
-filter design.
+lowpass that self-oscillates at high resonance.
 
 The topology is four cascaded first-order sections with nonlinear (tanh) feedback
 from the output back to the input:
@@ -594,13 +592,13 @@ x[n] → [tanh] → [pole 1] → [pole 2] → [pole 3] → [pole 4] → y[n]
 ```
 
 Each pole adds 6 dB/octave rolloff; the cascade gives 24 dB/octave. The resonance
-feedback creates a peak at the cutoff frequency — increasing resonance narrows and
+feedback creates a peak at the cutoff frequency, increasing resonance narrows and
 amplifies this peak until the loop gain exceeds unity and the filter **self-oscillates**:
 it produces a sustained tone at the cutoff frequency even with zero input.
 
 Parameters:
-- `cutoff` — normalised frequency: 0.0 = DC, 1.0 = Nyquist
-- `resonance` — feedback amount: 0.0 = damped, 4.0 = self-oscillation threshold
+- `cutoff`: normalised frequency: 0.0 = DC, 1.0 = Nyquist
+- `resonance`: feedback amount: 0.0 = damped, 4.0 = self-oscillation threshold
 
 ```rust
 use resonant_filters::nonlinear::MoogLadder;
@@ -613,7 +611,7 @@ let output: Vec<f32> = (0..256)
     .collect();
 ```
 
-At `resonance = 4.0` the filter self-oscillates — feeding it a single impulse and
+At `resonance = 4.0` the filter self-oscillates, feeding it a single impulse and
 then silence produces a sustained sinusoid at the cutoff frequency.
 
 ### State-variable filter (SVF): four outputs from one pass
@@ -622,10 +620,10 @@ A conventional filter computes one output type (lowpass, or highpass, etc.). The
 **state-variable filter** (SVF) computes all four simultaneously from a single pass
 through the signal, at the same CPU cost as one:
 
-- **Lowpass** (LP) — attenuates above cutoff
-- **Highpass** (HP) — attenuates below cutoff
-- **Bandpass** (BP) — peak at cutoff, rolls off in both directions
-- **Notch** — dip at cutoff (= LP + HP)
+- **Lowpass** (LP): attenuates above cutoff
+- **Highpass** (HP): attenuates below cutoff
+- **Bandpass** (BP): peak at cutoff, rolls off in both directions
+- **Notch**: dip at cutoff (= LP + HP)
 
 The Chamberlin SVF formulation uses two integrators in a loop:
 
@@ -639,8 +637,8 @@ notch = lp + hp
 Where `f0 = 2 × sin(π × fc / fs)` and `damp = 1/Q`.
 
 The LP + HP identity (`lp + hp = x − damp × bp`) means the sum of the lowpass and
-highpass outputs approximates the input when Q is high — an exact allpass property
-in the limit.
+highpass outputs approximates the input when Q is high (an exact allpass property
+in the limit).
 
 ```rust
 use resonant_filters::nonlinear::StateVariableFilter;
@@ -680,7 +678,7 @@ for (f, m) in resp.frequencies.iter().zip(resp.magnitudes.iter()) {
 }
 ```
 
-The result reflects the operating point at unity-gain input — a driven filter at
+The result reflects the operating point at unity-gain input, a driven filter at
 high input amplitude will measure differently because the saturation state changes.
 
 ---
@@ -694,7 +692,7 @@ for integer ratios (e.g. 48 kHz → 16 kHz, M = 3) but cannot express arbitrary
 rational ratios like 44100 Hz → 48000 Hz (ratio 147:160).
 
 A naïve approach would upsample by 160 (insert 159 zeros between each sample),
-apply a lowpass filter, then downsample by 147 — but this requires processing at
+apply a lowpass filter, then downsample by 147, but this requires processing at
 160× the original rate, which is prohibitively expensive.
 
 ### The polyphase decomposition
@@ -713,7 +711,7 @@ Starting from a single FIR lowpass filter `h[n]` of length `L = P × taps_per_ph
 2. To produce output sample `m`, identify which phase `p = m mod P` is active and
    how many input samples have been consumed: `m // P × Q` samples per output period.
 
-3. Convolve the input history with sub-filter `E_p` only — never the full FIR.
+3. Convolve the input history with sub-filter `E_p` only and never the full FIR.
 
 The result: each output sample costs `taps_per_phase` multiplications, regardless of
 the upsample factor P. Processing 44100→48000 (P=160, Q=147) costs the same per
@@ -757,7 +755,7 @@ r.process_into(&input_chunk, &mut out_buf);
 ```
 
 `reset()` clears the ring buffer and phase index, making the resampler behave as if
-newly constructed — useful when switching between unrelated audio segments.
+newly constructed which is useful when switching between unrelated audio segments.
 
 ### SNR considerations
 
@@ -790,7 +788,7 @@ let output = os.process(&input, |x| drive.process_sample(x));
 // `output` is at 44100 Hz; the distortion was computed at 176400 Hz
 ```
 
-For `N = 1`, `Oversample` is a zero-overhead passthrough — the upsamplers are
+For `N = 1`, `Oversample` is a zero-overhead passthrough thus the upsamplers are
 never created.
 
 ---
@@ -798,8 +796,7 @@ never created.
 ## Spectral Analysis
 
 Spectral features summarise the shape of a magnitude spectrum as a single number. They
-are the building blocks of music information retrieval (MIR) — used to classify timbre,
-detect changes in sound texture, and drive effects like auto-EQ.
+are the building blocks of music information retrieval (MIR) which are used to classify timbre,detect changes in sound texture, and drive effects like auto-EQ.
 
 All four features in resonant operate on a **magnitude spectrum**: a slice of non-negative
 values where each element is the magnitude of a frequency bin. Compute this from a
@@ -807,7 +804,7 @@ frequency-domain signal with `SignalFreqExt::magnitude()`.
 
 ### Spectral centroid
 
-The centroid is the **weighted mean frequency** of the spectrum — its "centre of mass".
+The centroid is the **weighted mean frequency** of the spectrum, its "centre of mass".
 
 ```
 centroid = Σ(magnitude[k] × frequency[k]) / Σ(magnitude[k])
@@ -829,7 +826,7 @@ let centroid = spectral::spectral_centroid(&magnitudes, &frequencies).unwrap();
 
 ### Spectral spread
 
-Spread is the **standard deviation** of frequency around the centroid — it measures how
+Spread is the **standard deviation** of frequency around the centroid, it measures how
 "wide" the spectrum is.
 
 ```
@@ -858,8 +855,8 @@ assert!(spread_noise > spread_sine); // noise is much wider than a pure tone
 ### Spectral flatness
 
 Flatness is the ratio of the **geometric mean** to the **arithmetic mean** of the
-magnitudes. It ranges from 0.0 (perfectly tonal — one sharp peak) to 1.0 (perfectly
-flat — noise-like energy across all bins).
+magnitudes. It ranges from 0.0 (perfectly tonal - one sharp peak) to 1.0 (perfectly
+flat - noise-like energy across all bins).
 
 ```
 flatness = geometric_mean(magnitudes) / arithmetic_mean(magnitudes)
@@ -894,7 +891,7 @@ is contained. The most common threshold is 85%.
 rolloff_85 = min frequency f such that: Σ_{k: freq[k] ≤ f} magnitude[k] ≥ 0.85 × Σ magnitude[k]
 ```
 
-- A **bass-heavy** mix has a low rolloff — most energy is in the low frequencies.
+- A **bass-heavy** mix has a low rolloff: most energy is in the low frequencies.
 - A **high-pitched** or bright sound has a high rolloff.
 - Rolloff is used to distinguish **speech from music** and to estimate the high-frequency
   boundary of content (useful for adaptive bit allocation).
@@ -948,7 +945,7 @@ let rolloff  = spectral::spectral_rolloff(&magnitudes, &frequencies, 0.85).unwra
 |---|---|---|
 | `resonant-core` | *(none required)* | `no_std`, `no_alloc` by default |
 | `resonant-core` | `alloc` | Enables `SlidingWindow` and other heap-backed APIs |
-| `resonant-fft` | *(none)* | `no_std`, `no_alloc` — radix-2 FFT and DCT only |
+| `resonant-fft` | *(none)* | `no_std`, `no_alloc`- radix-2 FFT and DCT only |
 | `resonant-fft` | `alloc` | Enables extension traits (`SignalFftExt`, `SignalFreqExt`) |
 | `resonant-fft` | `rustfft` (default) | Arbitrary-length FFT; implies `alloc` |
 | `resonant-filters` | *(none)* | `no_std`, `no_alloc` — biquad and FIR filters |
@@ -1001,7 +998,7 @@ cargo build -p resonant-filters --target wasm32-unknown-unknown
 
 The SIMD dispatch modules use `#[cfg(target_arch = "x86_64")]` and
 `#[cfg(target_arch = "aarch64")]`, so the scalar fallback is automatically selected for
-`wasm32` — no conditional compilation is needed in your own code.
+`wasm32` - no conditional compilation is needed in your own code.
 
 ---
 
@@ -1032,7 +1029,7 @@ pub(crate) fn multiply_buffers(a: &mut [f32], b: &[f32]) {
 ```
 
 The `dispatch_*` functions are separate so that clippy's `needless_return` lint is
-not triggered. The scalar implementation is always compiled — it serves as the reference
+not triggered. The scalar implementation is always compiled as it serves as the reference
 for correctness tests and is the only path on unsupported targets.
 
 ### Accelerated paths
@@ -1048,7 +1045,7 @@ for correctness tests and is the only path on unsupported targets.
 ### Safety
 
 All intrinsic functions are `unsafe`. Each unsafe block carries a `// SAFETY:` comment
-explaining the invariant. Runtime CPU feature detection is not used — each accelerated
+explaining the invariant. Runtime CPU feature detection is not used, each accelerated
 function requires its target feature to be enabled at compile time via
 `#[target_feature(enable = "sse2")]`. This is safe when the binary is compiled for a
 specific target (e.g. `-C target-feature=+sse2`) or when the caller has verified support
