@@ -562,7 +562,10 @@ mod tests {
             let bins = bins.ok();
             let num_frames = audio.num_frames();
             let expected_bins = num_frames / 2 + 1;
-            assert_eq!(bins.as_ref().map(|bin_vec| bin_vec.len()), Some(expected_bins));
+            assert_eq!(
+                bins.as_ref().map(|bin_vec| bin_vec.len()),
+                Some(expected_bins)
+            );
         }
     }
 
@@ -721,8 +724,14 @@ mod tests {
 
         // Rectangular window should produce different magnitudes than Hann
         if let (Ok(hann_bins), Ok(rect_bins)) = (bins_hann, bins_rect) {
-            let hann_peak: f32 = hann_bins.iter().map(|bin| bin.magnitude).fold(0.0, f32::max);
-            let rect_peak: f32 = rect_bins.iter().map(|bin| bin.magnitude).fold(0.0, f32::max);
+            let hann_peak: f32 = hann_bins
+                .iter()
+                .map(|bin| bin.magnitude)
+                .fold(0.0, f32::max);
+            let rect_peak: f32 = rect_bins
+                .iter()
+                .map(|bin| bin.magnitude)
+                .fold(0.0, f32::max);
             // Rectangular window preserves more energy at the peak
             assert!(
                 rect_peak > hann_peak,
@@ -761,7 +770,10 @@ mod tests {
         assert!(iter.is_ok());
         let iter = iter.ok();
         let frames: Vec<_> = iter.into_iter().flatten().collect();
-        let ok_frames: Vec<_> = frames.into_iter().filter_map(|frame_result| frame_result.ok()).collect();
+        let ok_frames: Vec<_> = frames
+            .into_iter()
+            .filter_map(|frame_result| frame_result.ok())
+            .collect();
         assert_eq!(ok_frames.len(), 15);
     }
 
@@ -867,11 +879,15 @@ mod tests {
         let analysis_opt = analysis_opt.as_ref();
 
         // bpm_confidence in [0, 1]
-        assert!(analysis_opt.map_or(false, |analysis| analysis.bpm_confidence >= 0.0
-            && analysis.bpm_confidence <= 1.0));
+        assert!(
+            analysis_opt.map_or(false, |analysis| analysis.bpm_confidence >= 0.0
+                && analysis.bpm_confidence <= 1.0)
+        );
 
         // Peak near 0 dBFS — each burst is a full-scale sine
-        assert!(analysis_opt.map_or(false, |analysis| analysis.peak_db.map_or(false, |peak| peak > -3.0)));
+        assert!(analysis_opt.map_or(false, |analysis| analysis
+            .peak_db
+            .map_or(false, |peak| peak > -3.0)));
 
         // RMS is well below peak because the signal is sparse click bursts
         assert!(analysis_opt.map_or(false, |analysis| {
@@ -895,7 +911,9 @@ mod tests {
             // Silence → no BPM
             assert!(analysis.bpm.is_none());
             // Peak and RMS at floor
-            assert!(analysis.peak_db.map_or(false, |peak| (peak - (-120.0)).abs() < 1.0));
+            assert!(analysis
+                .peak_db
+                .map_or(false, |peak| (peak - (-120.0)).abs() < 1.0));
         }
     }
 
@@ -959,8 +977,14 @@ mod tests {
         let af_both = AudioFile::from_samples(both, sample_rate, 2);
         let af_left = AudioFile::from_samples(left_only, sample_rate, 2);
 
-        let lufs_both = af_both.analyse().ok().and_then(|analysis| analysis.loudness_lufs);
-        let lufs_left = af_left.analyse().ok().and_then(|analysis| analysis.loudness_lufs);
+        let lufs_both = af_both
+            .analyse()
+            .ok()
+            .and_then(|analysis| analysis.loudness_lufs);
+        let lufs_left = af_left
+            .analyse()
+            .ok()
+            .and_then(|analysis| analysis.loudness_lufs);
 
         if let (Some(lufs_full_stereo), Some(lufs_left_only)) = (lufs_both, lufs_left) {
             let lufs_diff = lufs_full_stereo - lufs_left_only;
@@ -1070,7 +1094,10 @@ mod tests {
         assert!(result_b.is_ok());
         if let (Ok(from_analyse), Ok(from_analyse_with)) = (result_a, result_b) {
             assert_eq!(from_analyse.bpm, from_analyse_with.bpm);
-            assert_eq!(from_analyse.bpm_confidence, from_analyse_with.bpm_confidence);
+            assert_eq!(
+                from_analyse.bpm_confidence,
+                from_analyse_with.bpm_confidence
+            );
             assert_eq!(from_analyse.onsets, from_analyse_with.onsets);
             assert_eq!(from_analyse.loudness_lufs, from_analyse_with.loudness_lufs);
             assert_eq!(from_analyse.peak_db, from_analyse_with.peak_db);
@@ -1092,7 +1119,10 @@ mod tests {
         // analyse() with a 2048-point window
         let result = audio.clone().with_analysis_window(2048).analyse();
         assert!(result.is_ok(), "analyse() failed: {:?}", result.err());
-        let facade_bpm_conf = result.ok().map(|analysis| analysis.bpm_confidence).unwrap_or(-1.0);
+        let facade_bpm_conf = result
+            .ok()
+            .map(|analysis| analysis.bpm_confidence)
+            .unwrap_or(-1.0);
 
         // Manually construct the same TempoEstimator that analyse() should use
         let manual_conf = TempoEstimator::new(sr)
