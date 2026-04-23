@@ -33,7 +33,7 @@ pub mod error;
 pub mod frequency_bin;
 
 // === Facade types ===
-pub use analysis::AnalysisResult;
+pub use analysis::{AnalysisFlags, AnalysisResult};
 pub use audio_file::{AudioFile, FftFrameIter, WindowFn};
 pub use error::AudioError;
 pub use frequency_bin::FrequencyBin;

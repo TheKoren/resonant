@@ -24,7 +24,7 @@ use resonant_core::signal::Signal;
 use resonant_core::window;
 use resonant_fft::{SignalFftExt, SignalFreqExt};
 
-use crate::analysis::AnalysisResult;
+use crate::analysis::{AnalysisFlags, AnalysisResult};
 
 use crate::decode::{decode_path, downmix_bs1770, downmix_to_mono};
 use crate::error::AudioError;
@@ -321,73 +321,110 @@ impl AudioFile {
 
     /// Run all analysis algorithms on the mono signal at once.
     ///
-    /// Computes tempo, onsets, key, loudness, and level in a single pass.
-    /// Use [`with_analysis_window`](Self::with_analysis_window) to override the
-    /// STFT window size for onset and chroma extraction.
+    /// Equivalent to `self.analyse_with(AnalysisFlags::ALL)`. Use
+    /// [`analyse_with`](Self::analyse_with) to run only a subset of algorithms.
     ///
     /// # Errors
     ///
     /// Returns [`AudioError::Analysis`] if any analysis step fails.
     pub fn analyse(&self) -> Result<AnalysisResult, AudioError> {
+        self.analyse_with(AnalysisFlags::ALL)
+    }
+
+    /// Run a subset of analysis algorithms, controlled by `flags`.
+    ///
+    /// Fields corresponding to skipped algorithms are returned as `None` or
+    /// empty `Vec`. Use [`AnalysisFlags::ALL`] to reproduce the behaviour of
+    /// [`analyse()`](Self::analyse).
+    ///
+    /// Use [`with_analysis_window`](Self::with_analysis_window) to override the
+    /// STFT window size for onset, chroma, and MFCC extraction.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AudioError::Analysis`] if any requested analysis step fails.
+    pub fn analyse_with(&self, flags: AnalysisFlags) -> Result<AnalysisResult, AudioError> {
         let mono = self.samples_mono();
         let sr = self.sample_rate as f32;
         let analysis_window = self.config.analysis_window_size;
 
         // Tempo
-        let mut tempo_estimator = TempoEstimator::new(sr);
-        if let Some(window_size) = analysis_window {
-            tempo_estimator = tempo_estimator
-                .with_onset_detector(OnsetDetector::new(sr).with_window_size(window_size));
-        }
-        let tempo = tempo_estimator.estimate(mono)?;
-        let bpm = if tempo.confidence >= TempoEstimator::CONFIDENCE_LOW {
-            Some(tempo.bpm)
+        let (bpm, bpm_confidence) = if flags.contains(AnalysisFlags::TEMPO) {
+            let mut tempo_estimator = TempoEstimator::new(sr);
+            if let Some(window_size) = analysis_window {
+                tempo_estimator = tempo_estimator
+                    .with_onset_detector(OnsetDetector::new(sr).with_window_size(window_size));
+            }
+            let tempo = tempo_estimator.estimate(mono)?;
+            let bpm = if tempo.confidence >= TempoEstimator::CONFIDENCE_LOW {
+                Some(tempo.bpm)
+            } else {
+                None
+            };
+            (bpm, tempo.confidence)
+        } else {
+            (None, 0.0)
+        };
+
+        // Onsets → timestamps in seconds
+        let onsets = if flags.contains(AnalysisFlags::ONSETS) {
+            let mut onset_detector = OnsetDetector::new(sr);
+            if let Some(window_size) = analysis_window {
+                onset_detector = onset_detector.with_window_size(window_size);
+            }
+            onset_detector
+                .detect(mono)?
+                .into_iter()
+                .map(|o| o.time_secs)
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // Key via chroma → Krumhansl-Schmuckler
+        let key = if flags.contains(AnalysisFlags::KEY) {
+            let mut chroma_extractor = ChromaExtractor::new(sr);
+            if let Some(window_size) = analysis_window {
+                chroma_extractor = chroma_extractor.with_window_size(window_size);
+            }
+            let chroma = chroma_extractor.extract(mono)?;
+            KeyDetector::new()
+                .detect(&chroma)
+                .filter(|k| k.confidence > 0.3)
         } else {
             None
         };
 
-        // Onsets → timestamps in seconds
-        let mut onset_detector = OnsetDetector::new(sr);
-        if let Some(window_size) = analysis_window {
-            onset_detector = onset_detector.with_window_size(window_size);
-        }
-        let onsets: Vec<f32> = onset_detector
-            .detect(mono)?
-            .into_iter()
-            .map(|o| o.time_secs)
-            .collect();
-
-        // Key via chroma → Krumhansl-Schmuckler
-        let mut chroma_extractor = ChromaExtractor::new(sr);
-        if let Some(window_size) = analysis_window {
-            chroma_extractor = chroma_extractor.with_window_size(window_size);
-        }
-        let chroma = chroma_extractor.extract(mono)?;
-        let key = KeyDetector::new()
-            .detect(&chroma)
-            .filter(|k| k.confidence > 0.3);
-
         // Integrated loudness — BS.1770-4 weighted downmix for stereo/multi-channel
-        let lufs_mono = downmix_bs1770(&self.samples_interleaved, self.channels);
-        let loudness_lufs = LufsAnalyser::new(sr)
-            .ok()
-            .and_then(|mut lufs_analyser| lufs_analyser.integrated_loudness(&lufs_mono).ok());
-
-        // Level
-        let loudness_analyser = LoudnessAnalyser::new();
-        let peak_db = loudness_analyser.peak_db(mono);
-        let rms_db = loudness_analyser.rms_db(mono);
+        let (loudness_lufs, peak_db, rms_db) = if flags.contains(AnalysisFlags::LOUDNESS) {
+            let lufs_mono = downmix_bs1770(&self.samples_interleaved, self.channels);
+            let loudness_lufs = LufsAnalyser::new(sr)
+                .ok()
+                .and_then(|mut lufs_analyser| lufs_analyser.integrated_loudness(&lufs_mono).ok());
+            let loudness_analyser = LoudnessAnalyser::new();
+            (
+                loudness_lufs,
+                Some(loudness_analyser.peak_db(mono)),
+                Some(loudness_analyser.rms_db(mono)),
+            )
+        } else {
+            (None, None, None)
+        };
 
         // MFCCs
-        let mut mfcc_extractor = MfccExtractor::new(sr);
-        if let Some(window_size) = analysis_window {
-            mfcc_extractor = mfcc_extractor.with_window_size(window_size);
-        }
-        let mfcc = mfcc_extractor.extract(mono).unwrap_or_default();
+        let mfcc = if flags.contains(AnalysisFlags::MFCC) {
+            let mut mfcc_extractor = MfccExtractor::new(sr);
+            if let Some(window_size) = analysis_window {
+                mfcc_extractor = mfcc_extractor.with_window_size(window_size);
+            }
+            mfcc_extractor.extract(mono).unwrap_or_default()
+        } else {
+            vec![]
+        };
 
         Ok(AnalysisResult {
             bpm,
-            bpm_confidence: tempo.confidence,
+            bpm_confidence,
             key,
             onsets,
             loudness_lufs,
@@ -834,10 +871,14 @@ mod tests {
             && r.bpm_confidence <= 1.0));
 
         // Peak near 0 dBFS — each burst is a full-scale sine
-        assert!(r.map_or(false, |r| r.peak_db > -3.0));
+        assert!(r.map_or(false, |r| r.peak_db.map_or(false, |p| p > -3.0)));
 
         // RMS is well below peak because the signal is sparse click bursts
-        assert!(r.map_or(false, |r| r.rms_db > -120.0 && r.rms_db < r.peak_db));
+        assert!(r.map_or(false, |r| {
+            let rms = r.rms_db.unwrap_or(-120.0);
+            let peak = r.peak_db.unwrap_or(-120.0);
+            rms > -120.0 && rms < peak
+        }));
     }
 
     #[test]
@@ -854,7 +895,7 @@ mod tests {
             // Silence → no BPM
             assert!(r.bpm.is_none());
             // Peak and RMS at floor
-            assert!((r.peak_db - (-120.0)).abs() < 1.0);
+            assert!(r.peak_db.map_or(false, |p| (p - (-120.0)).abs() < 1.0));
         }
     }
 
@@ -869,7 +910,7 @@ mod tests {
             );
             if let Ok(r) = &result {
                 assert!(r.bpm_confidence >= 0.0 && r.bpm_confidence <= 1.0);
-                assert!(r.peak_db <= 0.1); // dBFS ≤ 0 for normalised audio
+                assert!(r.peak_db.map_or(true, |p| p <= 0.1)); // dBFS ≤ 0 for normalised audio
             }
         }
     }
@@ -953,6 +994,88 @@ mod tests {
                     frame.coefficients.len()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn analyse_with_loudness_only_skips_tempo() {
+        use std::f32::consts::PI;
+        let sample_rate = 44100_u32;
+        let sr = sample_rate as f32;
+        let n = (sr * 3.0) as usize;
+        let samples: Vec<f32> = (0..n)
+            .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
+            .collect();
+
+        let audio = AudioFile::from_samples(samples, sample_rate, 1);
+        let result = audio.analyse_with(AnalysisFlags::LOUDNESS);
+        assert!(result.is_ok(), "analyse_with failed: {:?}", result.err());
+        if let Ok(r) = result {
+            assert_eq!(r.bpm_confidence, 0.0);
+            assert!(r.bpm.is_none());
+            assert!(r.onsets.is_empty());
+            assert!(r.mfcc.is_empty());
+            assert!(r.loudness_lufs.is_some());
+            assert!(r.peak_db.is_some());
+            assert!(r.rms_db.is_some());
+        }
+    }
+
+    #[test]
+    fn analyse_with_tempo_and_onsets_skips_loudness() {
+        use std::f32::consts::PI;
+        let sample_rate = 44100_u32;
+        let sr = sample_rate as f32;
+        let total = (sr * 3.0) as usize;
+        let mut samples = vec![0.0_f32; total];
+        let interval = (60.0 / 120.0 * sr) as usize;
+        let mut pos = 0;
+        while pos < total {
+            for j in 0..64 {
+                if pos + j < total {
+                    samples[pos + j] = (2.0 * PI * 440.0 * j as f32 / sr).sin();
+                }
+            }
+            pos += interval;
+        }
+
+        let audio = AudioFile::from_samples(samples, sample_rate, 1);
+        let result = audio.analyse_with(AnalysisFlags::TEMPO | AnalysisFlags::ONSETS);
+        assert!(result.is_ok(), "analyse_with failed: {:?}", result.err());
+        if let Ok(r) = result {
+            assert!(!r.onsets.is_empty());
+            assert!(r.loudness_lufs.is_none());
+            assert!(r.peak_db.is_none());
+            assert!(r.rms_db.is_none());
+            assert!(r.key.is_none());
+            assert!(r.mfcc.is_empty());
+        }
+    }
+
+    #[test]
+    fn analyse_with_all_matches_analyse() {
+        use std::f32::consts::PI;
+        let sample_rate = 44100_u32;
+        let sr = sample_rate as f32;
+        let n = (sr * 2.0) as usize;
+        let samples: Vec<f32> = (0..n)
+            .map(|i| (2.0 * PI * 440.0 * i as f32 / sr).sin())
+            .collect();
+
+        let audio = AudioFile::from_samples(samples, sample_rate, 1);
+        let result_a = audio.analyse();
+        let result_b = audio.analyse_with(AnalysisFlags::ALL);
+
+        assert!(result_a.is_ok());
+        assert!(result_b.is_ok());
+        if let (Ok(a), Ok(b)) = (result_a, result_b) {
+            assert_eq!(a.bpm, b.bpm);
+            assert_eq!(a.bpm_confidence, b.bpm_confidence);
+            assert_eq!(a.onsets, b.onsets);
+            assert_eq!(a.loudness_lufs, b.loudness_lufs);
+            assert_eq!(a.peak_db, b.peak_db);
+            assert_eq!(a.rms_db, b.rms_db);
+            assert_eq!(a.mfcc, b.mfcc);
         }
     }
 
