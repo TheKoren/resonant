@@ -13,6 +13,46 @@ use resonant_filters::{design, PolyphaseResampler};
 
 use crate::AnalysisError;
 
+/// Channel configuration for multi-channel loudness measurement.
+///
+/// Per ITU-R BS.1770-4, each channel is K-weighted independently; the gating
+/// operates on the weighted sum of per-channel mean-square levels.
+///
+/// Standard weights: L=1.0, R=1.0, C=1.0, LFE=0.0, Ls=√2, Rs=√2.
+#[derive(Debug, Clone)]
+pub struct ChannelConfig {
+    /// Per-channel gain weights (linear, not dB).
+    pub weights: Vec<f32>,
+}
+
+impl ChannelConfig {
+    /// Mono passthrough (weight = 1.0).
+    #[must_use]
+    pub fn mono() -> Self {
+        Self { weights: vec![1.0] }
+    }
+
+    /// Stereo per BS.1770-4 (L=1.0, R=1.0).
+    #[must_use]
+    pub fn stereo() -> Self {
+        Self {
+            weights: vec![1.0, 1.0],
+        }
+    }
+
+    /// 5.1 surround per BS.1770-4 channel order: L, R, C, LFE, Ls, Rs.
+    ///
+    /// LFE is excluded (weight 0.0). Surround channels Ls and Rs are weighted
+    /// at √2 ≈ 1.4142 (3 dB higher than front channels per the standard).
+    #[must_use]
+    pub fn surround_5_1() -> Self {
+        use core::f32::consts::SQRT_2;
+        Self {
+            weights: vec![1.0, 1.0, 1.0, 0.0, SQRT_2, SQRT_2],
+        }
+    }
+}
+
 /// Minimum loudness value returned for silence or near-silence.
 const SILENCE_LUFS: f32 = -120.0;
 
@@ -209,6 +249,108 @@ impl LufsAnalyser {
         let rlb_c = *self.rlb.coeffs();
         self.pre = Biquad::new(pre_c);
         self.rlb = Biquad::new(rlb_c);
+    }
+
+    /// Integrated loudness (LUFS-I) from interleaved multi-channel audio.
+    ///
+    /// Each channel is K-weighted independently. The gating operates on the
+    /// weighted sum of per-channel mean-square levels per ITU-R BS.1770-4 §2:
+    ///
+    /// `z_j = Σ G_c · mean_sq(channel_c, block_j)`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AnalysisError::EmptyInput`] if the input is empty, shorter than
+    /// one 400 ms block, or all blocks fall below the absolute gate (silence).
+    /// Returns [`AnalysisError::InvalidParameter`] if the channel config has no
+    /// weights or the sample count is not a multiple of the channel count.
+    pub fn integrated_loudness_multichannel(
+        &mut self,
+        interleaved: &[f32],
+        config: &ChannelConfig,
+    ) -> Result<f32, AnalysisError> {
+        let n_channels = config.weights.len();
+        if n_channels == 0 {
+            return Err(AnalysisError::InvalidParameter {
+                name: "config",
+                reason: "channel config has no weights",
+            });
+        }
+        if interleaved.is_empty() {
+            return Err(AnalysisError::EmptyInput);
+        }
+        if interleaved.len() % n_channels != 0 {
+            return Err(AnalysisError::InvalidParameter {
+                name: "interleaved",
+                reason: "sample count is not a multiple of channel count",
+            });
+        }
+
+        let n_frames = interleaved.len() / n_channels;
+        let block = block_len(self.sample_rate);
+        let hop = hop_len(self.sample_rate);
+
+        if n_frames < block {
+            return Err(AnalysisError::EmptyInput);
+        }
+
+        let (pre_coeffs, rlb_coeffs) = kweight_coeffs(self.sample_rate)?;
+        let mut channel_filters: Vec<(Biquad, Biquad)> = (0..n_channels)
+            .map(|_| (Biquad::new(pre_coeffs), Biquad::new(rlb_coeffs)))
+            .collect();
+
+        // K-weight each channel independently.
+        let mut channel_kw: Vec<Vec<f32>> = (0..n_channels)
+            .map(|_| Vec::with_capacity(n_frames))
+            .collect();
+        for frame in interleaved.chunks_exact(n_channels) {
+            for ((ch_kw, (pre, rlb)), &sample) in channel_kw
+                .iter_mut()
+                .zip(channel_filters.iter_mut())
+                .zip(frame.iter())
+            {
+                ch_kw.push(rlb.process_sample(pre.process_sample(sample)));
+            }
+        }
+
+        // z_j = Σ_c G_c · ms_c_j  (BS.1770-4 eq. 2)
+        let n_blocks = (n_frames - block) / hop + 1;
+        let zs: Vec<f32> = (0..n_blocks)
+            .map(|j| {
+                let start = j * hop;
+                config
+                    .weights
+                    .iter()
+                    .zip(channel_kw.iter())
+                    .map(|(&weight, ch_kw)| {
+                        let sl = &ch_kw[start..start + block];
+                        let ms = sl.iter().map(|&x| x * x).sum::<f32>() / block as f32;
+                        weight * ms
+                    })
+                    .sum()
+            })
+            .collect();
+
+        if zs.is_empty() {
+            return Err(AnalysisError::EmptyInput);
+        }
+
+        // Absolute gate — discard blocks below −70 LUFS.
+        let abs_z = lufs_to_ms(ABS_GATE_LUFS);
+        let pass_abs: Vec<f32> = zs.iter().copied().filter(|&z| z >= abs_z).collect();
+        if pass_abs.is_empty() {
+            return Err(AnalysisError::EmptyInput);
+        }
+
+        // Relative gate — discard blocks more than 10 LU below the absolute-gated mean.
+        let j_gate = ms_to_lufs(mean_f32(&pass_abs)) - REL_GATE_OFFSET_LU;
+        let rel_z = lufs_to_ms(j_gate);
+        let pass_rel: Vec<f32> = zs.iter().copied().filter(|&z| z >= rel_z).collect();
+        if pass_rel.is_empty() {
+            return Err(AnalysisError::EmptyInput);
+        }
+
+        Ok(ms_to_lufs(mean_f32(&pass_rel)))
     }
 
     #[inline]
@@ -517,5 +659,123 @@ mod tests {
         let ms = lufs_to_ms(lufs);
         let back = ms_to_lufs(ms);
         assert!((back - lufs).abs() < 0.001, "roundtrip: {lufs} → {back:.4}");
+    }
+
+    // --- integrated_loudness_multichannel ---
+
+    #[test]
+    fn multichannel_empty_input_returns_error() {
+        let mut a = make(SR);
+        assert!(matches!(
+            a.integrated_loudness_multichannel(&[], &ChannelConfig::stereo()),
+            Err(AnalysisError::EmptyInput)
+        ));
+    }
+
+    #[test]
+    fn multichannel_empty_config_returns_error() {
+        let mut a = make(SR);
+        let config = ChannelConfig { weights: vec![] };
+        assert!(matches!(
+            a.integrated_loudness_multichannel(&[0.1_f32; 100], &config),
+            Err(AnalysisError::InvalidParameter { .. })
+        ));
+    }
+
+    #[test]
+    fn multichannel_mismatched_samples_returns_error() {
+        let mut a = make(SR);
+        // 3 samples is not a multiple of 2 channels.
+        assert!(matches!(
+            a.integrated_loudness_multichannel(&[0.1_f32; 3], &ChannelConfig::stereo()),
+            Err(AnalysisError::InvalidParameter { .. })
+        ));
+    }
+
+    #[test]
+    fn multichannel_mono_matches_integrated_loudness() {
+        // ChannelConfig::mono() wrapping a mono signal must give the same LUFS
+        // as integrated_loudness() on the same samples.
+        let n = (SR * 5.0) as usize;
+        let sig = sine(1000.0, 0.10, n, SR);
+        let mut a1 = make(SR);
+        let mut a2 = make(SR);
+        let lufs_mono = a1
+            .integrated_loudness(&sig)
+            .unwrap_or_else(|e| panic!("integrated_loudness error: {e}"));
+        let lufs_mc = a2
+            .integrated_loudness_multichannel(&sig, &ChannelConfig::mono())
+            .unwrap_or_else(|e| panic!("multichannel mono error: {e}"));
+        assert!(
+            (lufs_mono - lufs_mc).abs() < 0.01,
+            "mono config should match integrated_loudness: {lufs_mono:.3} vs {lufs_mc:.3}"
+        );
+    }
+
+    #[test]
+    fn stereo_identical_channels_is_three_lu_above_mono() {
+        // BS.1770-4 with G_L=G_R=1.0: z_stereo = 2 · z_mono →
+        // LUFS_stereo = LUFS_mono + 10·log10(2) ≈ LUFS_mono + 3.01 LU.
+        let n = (SR * 5.0) as usize;
+        let mono = sine(1000.0, 0.10, n, SR);
+        let stereo: Vec<f32> = mono.iter().flat_map(|&s| [s, s]).collect();
+
+        let mut a_mono = make(SR);
+        let mut a_stereo = make(SR);
+
+        let lufs_mono = a_mono
+            .integrated_loudness(&mono)
+            .unwrap_or_else(|e| panic!("mono error: {e}"));
+        let lufs_stereo = a_stereo
+            .integrated_loudness_multichannel(&stereo, &ChannelConfig::stereo())
+            .unwrap_or_else(|e| panic!("stereo error: {e}"));
+
+        let diff = lufs_stereo - lufs_mono;
+        assert!(
+            (diff - 3.01).abs() < 0.1,
+            "identical stereo should be +3.01 LU above mono, got {diff:.3} LU"
+        );
+    }
+
+    #[test]
+    fn surround_5_1_lfe_only_is_gated_out() {
+        // LFE channel (index 3) has weight 0.0 — even a loud LFE signal must
+        // result in all blocks being silenced by the absolute gate.
+        let n = (SR * 5.0) as usize;
+        let lfe_signal = sine(60.0, 0.5, n, SR);
+        // Interleave: L=0, R=0, C=0, LFE=signal, Ls=0, Rs=0
+        let interleaved: Vec<f32> = (0..n)
+            .flat_map(|i| [0.0, 0.0, 0.0, lfe_signal[i], 0.0, 0.0])
+            .collect();
+
+        let mut a = make(SR);
+        assert!(
+            matches!(
+                a.integrated_loudness_multichannel(&interleaved, &ChannelConfig::surround_5_1()),
+                Err(AnalysisError::EmptyInput)
+            ),
+            "LFE-only 5.1 should be gated out"
+        );
+    }
+
+    #[test]
+    fn stereo_silence_gated_out() {
+        let n = (SR * 5.0) as usize;
+        let stereo = vec![0.0_f32; n * 2];
+        let mut a = make(SR);
+        assert!(matches!(
+            a.integrated_loudness_multichannel(&stereo, &ChannelConfig::stereo()),
+            Err(AnalysisError::EmptyInput)
+        ));
+    }
+
+    #[test]
+    fn stereo_too_short_for_one_block_returns_error() {
+        let mut a = make(SR);
+        let stereo = vec![0.1_f32; 200]; // 100 stereo frames, well under 400 ms
+        assert!(matches!(
+            a.integrated_loudness_multichannel(&stereo, &ChannelConfig::stereo()),
+            Err(AnalysisError::EmptyInput)
+        ));
     }
 }
