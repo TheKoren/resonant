@@ -42,4 +42,4 @@ pub mod tempo;
 pub use error::AnalysisError;
 pub use key::{KeyDetector, KeyEstimate, Mode, PitchClass};
 pub use loudness::LoudnessAnalyser;
-pub use lufs::LufsAnalyser;
+pub use lufs::{ChannelConfig, LufsAnalyser};
