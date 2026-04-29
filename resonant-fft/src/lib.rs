@@ -68,6 +68,10 @@ pub(crate) mod simd;
 #[cfg(feature = "alloc")]
 pub mod stft;
 
+/// Phase vocoder for time-stretching and pitch-shifting.
+#[cfg(feature = "alloc")]
+pub mod phase_vocoder;
+
 #[cfg(feature = "alloc")]
 pub use ext::{SignalFftExt, SignalFreqExt, SignalIfftExt, SignalRfftExt};
 pub use num_complex::Complex;
