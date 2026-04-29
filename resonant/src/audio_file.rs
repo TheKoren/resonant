@@ -475,13 +475,13 @@ pub struct AudioStreamSource {
 
 impl DspNode for AudioStreamSource {
     fn process(&mut self, _input: Chunk) -> Result<Chunk, StreamError> {
-        let needed = self.chunk_frames * self.channels as usize;
-        if self.position + needed > self.samples.len() {
+        let needed_samples = self.chunk_frames * self.channels as usize;
+        if self.position + needed_samples > self.samples.len() {
             return Ok(Chunk::empty(self.sample_rate, self.channels));
         }
-        let frame = self.samples[self.position..self.position + needed].to_vec();
-        self.position += needed;
-        Ok(Chunk::new(frame, self.sample_rate, self.channels))
+        let chunk_samples = self.samples[self.position..self.position + needed_samples].to_vec();
+        self.position += needed_samples;
+        Ok(Chunk::new(chunk_samples, self.sample_rate, self.channels))
     }
 
     fn reset(&mut self) {
