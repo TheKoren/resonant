@@ -47,6 +47,9 @@ mod chunk;
 mod error;
 /// Operator-overloaded graph combinators for pipeline composition.
 pub mod graph;
+#[cfg(feature = "io")]
+/// Hardware audio I/O nodes backed by [`cpal`](https://docs.rs/cpal).
+pub mod io;
 mod node;
 /// Built-in processing nodes.
 pub mod nodes;
