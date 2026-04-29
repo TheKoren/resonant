@@ -165,8 +165,6 @@ impl AudioFile {
         self.samples_mono.len()
     }
 
-    // --- Builder methods ---
-
     /// Set the FFT window size in samples.
     ///
     /// When set, [`fft()`](Self::fft) analyses only the first `size` samples
@@ -226,8 +224,6 @@ impl AudioFile {
         self.config.analysis_window_size = Some(size);
         self
     }
-
-    // --- Analysis methods ---
 
     /// Compute the FFT of the mono signal, returning labelled frequency bins.
     ///
@@ -712,8 +708,6 @@ mod tests {
         assert!(bins.ok().map_or(false, |b| b.is_empty()));
     }
 
-    // --- Builder tests ---
-
     fn make_sine(num_samples: usize, freq_hz: f32, sample_rate: u32) -> AudioFile {
         let mut samples = vec![0.0_f32; num_samples];
         for (i, s) in samples.iter_mut().enumerate() {
@@ -817,8 +811,6 @@ mod tests {
         let _ = make_sine(1024, 440.0, 44100).with_overlap(-0.1);
     }
 
-    // --- fft_stream tests ---
-
     #[test]
     fn fft_stream_frame_count() {
         // 8192 samples, window=1024, overlap=0.5 → hop=512
@@ -907,8 +899,6 @@ mod tests {
             }
         }
     }
-
-    // --- analyse() tests ---
 
     #[test]
     fn analyse_from_samples() {
@@ -1163,8 +1153,6 @@ mod tests {
             assert_eq!(from_analyse.mfcc, from_analyse_with.mfcc);
         }
     }
-
-    // --- into_stream_source tests ---
 
     #[test]
     fn stream_source_yields_correct_chunk() {
