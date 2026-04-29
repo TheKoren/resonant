@@ -23,6 +23,7 @@ use resonant_analysis::tempo::TempoEstimator;
 use resonant_core::signal::Signal;
 use resonant_core::window;
 use resonant_fft::{SignalFftExt, SignalFreqExt};
+use resonant_stream::{Chunk, DspNode, StreamError};
 
 use crate::analysis::{AnalysisFlags, AnalysisResult};
 
@@ -432,6 +433,63 @@ impl AudioFile {
             rms_db,
             mfcc,
         })
+    }
+
+    /// Turn this file into a [`DspNode`] source for use in a `resonant-stream` pipeline.
+    ///
+    /// Consumes the `AudioFile` so the sample buffer moves into the node without
+    /// copying. Each `process()` call yields the next 512-frame chunk of interleaved
+    /// audio. When all samples are exhausted, empty chunks are returned. Call
+    /// `reset()` on the node to replay from the beginning.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use resonant::AudioFile;
+    /// use resonant_stream::PipelineBuilder;
+    ///
+    /// let audio = AudioFile::from_samples(vec![0.0; 44100], 44100, 1);
+    /// let source = audio.into_stream_source();
+    /// let mut pipeline = PipelineBuilder::new(44100, 1).node(source).build();
+    /// ```
+    #[must_use]
+    pub fn into_stream_source(self) -> AudioStreamSource {
+        AudioStreamSource {
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+            samples: self.samples_interleaved,
+            position: 0,
+            chunk_frames: 512,
+        }
+    }
+}
+
+/// A [`DspNode`] that reads interleaved audio frames sequentially from a decoded file.
+///
+/// Created by [`AudioFile::into_stream_source`]. Each `process()` call returns
+/// the next 512-frame chunk of audio. When all samples are exhausted, empty chunks
+/// are returned. Call `reset()` to replay from the beginning.
+pub struct AudioStreamSource {
+    samples: Vec<f32>,
+    position: usize,
+    chunk_frames: usize,
+    sample_rate: u32,
+    channels: u16,
+}
+
+impl DspNode for AudioStreamSource {
+    fn process(&mut self, _input: Chunk) -> Result<Chunk, StreamError> {
+        let needed = self.chunk_frames * self.channels as usize;
+        if self.position + needed > self.samples.len() {
+            return Ok(Chunk::empty(self.sample_rate, self.channels));
+        }
+        let frame = self.samples[self.position..self.position + needed].to_vec();
+        self.position += needed;
+        Ok(Chunk::new(frame, self.sample_rate, self.channels))
+    }
+
+    fn reset(&mut self) {
+        self.position = 0;
     }
 }
 
@@ -1104,6 +1162,97 @@ mod tests {
             assert_eq!(from_analyse.rms_db, from_analyse_with.rms_db);
             assert_eq!(from_analyse.mfcc, from_analyse_with.mfcc);
         }
+    }
+
+    // --- into_stream_source tests ---
+
+    #[test]
+    fn stream_source_yields_correct_chunk() {
+        let samples: Vec<f32> = (0..2048).map(|i| i as f32).collect();
+        let audio = AudioFile::from_samples(samples, 44100, 1);
+        let mut source = audio.into_stream_source();
+        let chunk = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(chunk.frames(), 512);
+        assert_eq!(chunk.sample_rate(), 44100);
+        assert_eq!(chunk.channels(), 1);
+        assert_eq!(chunk.data()[0], 0.0);
+        assert_eq!(chunk.data()[511], 511.0);
+    }
+
+    #[test]
+    fn stream_source_sequential_chunks() {
+        let samples: Vec<f32> = (0..1024).map(|i| i as f32).collect();
+        let audio = AudioFile::from_samples(samples, 44100, 1);
+        let mut source = audio.into_stream_source();
+        let first = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        let second = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(first.data()[0], 0.0);
+        assert_eq!(second.data()[0], 512.0);
+    }
+
+    #[test]
+    fn stream_source_returns_empty_when_exhausted() {
+        // Only 128 samples — less than one 512-frame chunk
+        let audio = AudioFile::from_samples(vec![1.0_f32; 128], 44100, 1);
+        let mut source = audio.into_stream_source();
+        let chunk = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(chunk.is_empty());
+    }
+
+    #[test]
+    fn stream_source_empty_after_last_frame() {
+        // Exactly two chunks worth of samples
+        let audio = AudioFile::from_samples(vec![1.0_f32; 1024], 44100, 1);
+        let mut source = audio.into_stream_source();
+        let _ = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        let _ = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        // Third call — exhausted
+        let drained = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(drained.is_empty());
+    }
+
+    #[test]
+    fn stream_source_reset_replays_from_start() {
+        let audio = AudioFile::from_samples(vec![1.0_f32; 1024], 44100, 1);
+        let mut source = audio.into_stream_source();
+        let first = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        source.reset();
+        let replayed = source
+            .process(Chunk::empty(44100, 1))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(first.data(), replayed.data());
+    }
+
+    #[test]
+    fn stream_source_stereo_interleaved() {
+        // Stereo: L=i*2, R=i*2+1 interleaved
+        let samples: Vec<f32> = (0..1024_u32).map(|i| i as f32).collect();
+        let audio = AudioFile::from_samples(samples, 44100, 2);
+        let mut source = audio.into_stream_source();
+        let chunk = source
+            .process(Chunk::empty(44100, 2))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(chunk.channels(), 2);
+        assert_eq!(chunk.frames(), 512);
+        // First stereo frame: L=0, R=1
+        assert_eq!(chunk.data()[0], 0.0);
+        assert_eq!(chunk.data()[1], 1.0);
     }
 
     #[test]
