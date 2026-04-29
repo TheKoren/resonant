@@ -13,9 +13,11 @@ keywords = ["dsp", "streaming", "audio", "pipeline"]
 resonant-core = { version = "0.3.0", path = "../resonant-core", default-features = false, features = ["alloc"] }
 resonant-fft = { version = "0.3.0", path = "../resonant-fft" }
 resonant-filters = { version = "0.3.0", path = "../resonant-filters" }
+cpal = { version = "0.15", optional = true }
 
 [features]
 default = []
+io = ["dep:cpal"]
 
 [package.metadata.docs.rs]
 all-features = true
