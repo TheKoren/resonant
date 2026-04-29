@@ -25,12 +25,12 @@ impl AudioOutput {
     /// the stream is confirmed playing, or an [`IoError`] if setup fails.
     pub fn open(sample_rate: u32, channels: u16) -> Result<Self, IoError> {
         let buffer: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
-        let buffer_thread = Arc::clone(&buffer);
+        let thread_buffer = Arc::clone(&buffer);
         let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<(), IoError>>(1);
         let (keep_alive_tx, keep_alive_rx) = std::sync::mpsc::sync_channel::<()>(0);
 
         std::thread::spawn(move || {
-            run_output_stream(sample_rate, channels, buffer_thread, init_tx, keep_alive_rx);
+            run_output_stream(sample_rate, channels, thread_buffer, init_tx, keep_alive_rx);
         });
 
         init_rx
@@ -145,13 +145,14 @@ where
 
 impl DspNode for AudioOutput {
     fn process(&mut self, input: Chunk) -> Result<Chunk, StreamError> {
-        let out_format = (input.sample_rate(), input.channels());
+        let out_sample_rate = input.sample_rate();
+        let out_channels = input.channels();
         let mut guard = self
             .buffer
             .lock()
             .map_err(|_| StreamError::ProcessingError("buffer mutex poisoned".into()))?;
         guard.extend(input.into_data());
-        Ok(Chunk::empty(out_format.0, out_format.1))
+        Ok(Chunk::empty(out_sample_rate, out_channels))
     }
 
     fn reset(&mut self) {

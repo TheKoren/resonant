@@ -40,12 +40,12 @@ impl AudioInput {
         chunk_frames: usize,
     ) -> Result<Self, IoError> {
         let buffer: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
-        let buffer_thread = Arc::clone(&buffer);
+        let thread_buffer = Arc::clone(&buffer);
         let (init_tx, init_rx) = std::sync::mpsc::sync_channel::<Result<(), IoError>>(1);
         let (keep_alive_tx, keep_alive_rx) = std::sync::mpsc::sync_channel::<()>(0);
 
         std::thread::spawn(move || {
-            run_input_stream(sample_rate, channels, buffer_thread, init_tx, keep_alive_rx);
+            run_input_stream(sample_rate, channels, thread_buffer, init_tx, keep_alive_rx);
         });
 
         init_rx
@@ -169,15 +169,15 @@ where
 
 impl DspNode for AudioInput {
     fn process(&mut self, _input: Chunk) -> Result<Chunk, StreamError> {
-        let needed = self.chunk_frames * self.channels as usize;
+        let needed_samples = self.chunk_frames * self.channels as usize;
         let mut guard = self
             .buffer
             .lock()
             .map_err(|_| StreamError::ProcessingError("buffer mutex poisoned".into()))?;
-        if guard.len() < needed {
+        if guard.len() < needed_samples {
             return Ok(Chunk::empty(self.sample_rate, self.channels));
         }
-        let samples: Vec<f32> = guard.drain(..needed).collect();
+        let samples: Vec<f32> = guard.drain(..needed_samples).collect();
         Ok(Chunk::new(samples, self.sample_rate, self.channels))
     }
 
