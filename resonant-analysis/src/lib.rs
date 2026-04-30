@@ -38,6 +38,8 @@ pub mod pitch;
 pub mod spectral;
 /// Tempo estimation via autocorrelation of onset strength envelope.
 pub mod tempo;
+/// Time-stretching and pitch-shifting via STFT phase vocoder.
+pub mod time_stretch;
 
 pub use error::AnalysisError;
 pub use key::{KeyDetector, KeyEstimate, Mode, PitchClass};
