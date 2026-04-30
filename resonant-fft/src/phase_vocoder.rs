@@ -146,26 +146,30 @@ impl PhaseVocoder {
         out_magnitudes: &mut [f32],
         out_phases: &mut [f32],
     ) {
-        let nb = self.num_bins;
+        let num_bins = self.num_bins;
         assert_eq!(
             magnitudes.len(),
-            nb,
+            num_bins,
             "magnitudes length must equal fft_size/2+1"
         );
-        assert_eq!(phases.len(), nb, "phases length must equal fft_size/2+1");
+        assert_eq!(
+            phases.len(),
+            num_bins,
+            "phases length must equal fft_size/2+1"
+        );
         assert_eq!(
             out_magnitudes.len(),
-            nb,
+            num_bins,
             "out_magnitudes length must equal fft_size/2+1"
         );
         assert_eq!(
             out_phases.len(),
-            nb,
+            num_bins,
             "out_phases length must equal fft_size/2+1"
         );
 
         let analysis_hop_f = self.hop_analysis as f32;
-        let stretch = self.hop_synthesis as f32 / analysis_hop_f;
+        let stretch_ratio = self.hop_synthesis as f32 / analysis_hop_f;
 
         for (k, ((&phase, &prev_phase), accum)) in phases
             .iter()
@@ -178,14 +182,14 @@ impl PhaseVocoder {
             // Deviation from expected, wrapped to [-π, π].
             let delta = phase - prev_phase - expected_advance;
             let true_advance = expected_advance + principal_argument(delta);
-            *accum += true_advance * stretch;
+            *accum += true_advance * stretch_ratio;
         }
         self.prev_phases.copy_from_slice(phases);
         out_magnitudes.copy_from_slice(magnitudes);
 
         // Identity phase locking: propagate peak accumulated phases to their
         // neighbouring bins to suppress phasiness.
-        apply_identity_phase_lock(magnitudes, phases, &self.phase_accum, out_phases, nb);
+        apply_identity_phase_lock(magnitudes, phases, &self.phase_accum, out_phases, num_bins);
     }
 
     /// Resets phase accumulator and frame-to-frame phase memory to zero.
@@ -245,39 +249,39 @@ fn apply_identity_phase_lock(
     let mut peak_left: Vec<Option<usize>> = vec![None; num_bins];
     let mut peak_right: Vec<Option<usize>> = vec![None; num_bins];
 
-    let mut last = None;
+    let mut last_peak = None;
     for k in 0..num_bins {
         if is_peak[k] {
-            last = Some(k);
+            last_peak = Some(k);
         }
-        peak_left[k] = last;
+        peak_left[k] = last_peak;
     }
 
-    let mut last = None;
+    let mut last_peak = None;
     for k in (0..num_bins).rev() {
         if is_peak[k] {
-            last = Some(k);
+            last_peak = Some(k);
         }
-        peak_right[k] = last;
+        peak_right[k] = last_peak;
     }
 
     for k in 0..num_bins {
-        let nearest = match (peak_left[k], peak_right[k]) {
-            (Some(l), Some(r)) => {
-                // k >= l and r >= k by construction, so no underflow.
-                if k - l <= r - k {
-                    l
+        let nearest_peak = match (peak_left[k], peak_right[k]) {
+            (Some(left_peak), Some(right_peak)) => {
+                // k >= left_peak and right_peak >= k by construction, so no underflow.
+                if k - left_peak <= right_peak - k {
+                    left_peak
                 } else {
-                    r
+                    right_peak
                 }
             }
-            (Some(l), None) => l,
-            (None, Some(r)) => r,
+            (Some(left_peak), None) => left_peak,
+            (None, Some(right_peak)) => right_peak,
             (None, None) => k,
         };
         // Phase relative to the peak in the input frame, shifted by the
         // peak's accumulated output phase.
-        out_phases[k] = phase_accum[nearest] + (in_phases[k] - in_phases[nearest]);
+        out_phases[k] = phase_accum[nearest_peak] + (in_phases[k] - in_phases[nearest_peak]);
     }
 }
 
@@ -332,11 +336,11 @@ mod tests {
     fn process_frame_passes_magnitudes_through() {
         let fft_size = 16;
         let mut pv = PhaseVocoder::new(fft_size, 4, 1.0).unwrap();
-        let nb = fft_size / 2 + 1;
-        let mags: Vec<f32> = (0..nb).map(|k| k as f32).collect();
-        let phases = std::vec![0.0_f32; nb];
-        let mut out_mags = std::vec![0.0_f32; nb];
-        let mut out_phases = std::vec![0.0_f32; nb];
+        let num_bins = fft_size / 2 + 1;
+        let mags: Vec<f32> = (0..num_bins).map(|k| k as f32).collect();
+        let phases = std::vec![0.0_f32; num_bins];
+        let mut out_mags = std::vec![0.0_f32; num_bins];
+        let mut out_phases = std::vec![0.0_f32; num_bins];
 
         pv.process_frame(&mags, &phases, &mut out_mags, &mut out_phases);
 
@@ -349,11 +353,11 @@ mod tests {
         // regardless of the number of frames processed.
         let fft_size = 32;
         let mut pv = PhaseVocoder::new(fft_size, 8, 1.0).unwrap();
-        let nb = fft_size / 2 + 1;
-        let mags = std::vec![1.0_f32; nb];
-        let phases = std::vec![0.0_f32; nb];
-        let mut out_mags = std::vec![0.0_f32; nb];
-        let mut out_phases = std::vec![0.0_f32; nb];
+        let num_bins = fft_size / 2 + 1;
+        let mags = std::vec![1.0_f32; num_bins];
+        let phases = std::vec![0.0_f32; num_bins];
+        let mut out_mags = std::vec![0.0_f32; num_bins];
+        let mut out_phases = std::vec![0.0_f32; num_bins];
 
         for _ in 0..8 {
             pv.process_frame(&mags, &phases, &mut out_mags, &mut out_phases);
@@ -369,12 +373,12 @@ mod tests {
     #[test]
     fn reset_restores_initial_state() {
         let fft_size = 16;
-        let nb = fft_size / 2 + 1;
-        let mags = std::vec![1.0_f32; nb];
-        let phases: Vec<f32> = (0..nb).map(|k| k as f32 * 0.3).collect();
-        let mut out_mags = std::vec![0.0_f32; nb];
-        let mut out_phases_after_reset = std::vec![0.0_f32; nb];
-        let mut out_phases_fresh = std::vec![0.0_f32; nb];
+        let num_bins = fft_size / 2 + 1;
+        let mags = std::vec![1.0_f32; num_bins];
+        let phases: Vec<f32> = (0..num_bins).map(|k| k as f32 * 0.3).collect();
+        let mut out_mags = std::vec![0.0_f32; num_bins];
+        let mut out_phases_after_reset = std::vec![0.0_f32; num_bins];
+        let mut out_phases_fresh = std::vec![0.0_f32; num_bins];
 
         let mut pv = PhaseVocoder::new(fft_size, 4, 1.0).unwrap();
         pv.process_frame(&mags, &phases, &mut out_mags, &mut out_phases_after_reset);
@@ -406,26 +410,26 @@ mod tests {
         let fft_size = 32;
         let hop = 8;
         let mut pv = PhaseVocoder::new(fft_size, hop, 1.0).unwrap();
-        let nb = fft_size / 2 + 1;
+        let num_bins = fft_size / 2 + 1;
 
         let k_target = 3usize;
         let expected_advance = TWO_PI * (k_target as f32) * (hop as f32) / (fft_size as f32);
 
-        let mut mags = std::vec![0.0_f32; nb];
+        let mut mags = std::vec![0.0_f32; num_bins];
         mags[k_target] = 1.0;
 
-        let mut out_mags = std::vec![0.0_f32; nb];
-        let mut out_phases = std::vec![0.0_f32; nb];
+        let mut out_mags = std::vec![0.0_f32; num_bins];
+        let mut out_phases = std::vec![0.0_f32; num_bins];
 
         // Priming frame: prev_phases gets set to the initial input phases.
-        let zero_phases = std::vec![0.0_f32; nb];
+        let zero_phases = std::vec![0.0_f32; num_bins];
         pv.process_frame(&mags, &zero_phases, &mut out_mags, &mut out_phases);
         let mut prev_out_phase = out_phases[k_target];
         let mut accumulated_input_phase = expected_advance;
 
         // Frames 2-8: verify the per-frame phase increment is constant.
         for _ in 0..7 {
-            let mut phases = std::vec![0.0_f32; nb];
+            let mut phases = std::vec![0.0_f32; num_bins];
             phases[k_target] = accumulated_input_phase;
 
             pv.process_frame(&mags, &phases, &mut out_mags, &mut out_phases);
