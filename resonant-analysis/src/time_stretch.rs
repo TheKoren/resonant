@@ -72,16 +72,16 @@ pub fn time_stretch(
 fn run_phase_vocoder(samples: &[f32], stretch_factor: f32) -> Result<Vec<f32>, AnalysisError> {
     let n = samples.len();
     let fft_size = choose_fft_size(n);
-    let hop_a = fft_size / 4; // 75% overlap
+    let hop_analysis = fft_size / 4; // 75% overlap
 
-    let mut pv = PhaseVocoder::new(fft_size, hop_a, stretch_factor)?;
-    let hop_s = pv.hop_synthesis();
+    let mut phase_vocoder = PhaseVocoder::new(fft_size, hop_analysis, stretch_factor)?;
+    let hop_synthesis = phase_vocoder.hop_synthesis();
     let num_bins = fft_size / 2 + 1;
 
     let hann = hann_window(fft_size);
 
-    let n_frames = n.saturating_sub(fft_size) / hop_a + 1;
-    let out_len = n_frames * hop_s + fft_size;
+    let n_frames = n.saturating_sub(fft_size) / hop_analysis + 1;
+    let out_len = n_frames * hop_synthesis + fft_size;
     let mut output = vec![0.0_f32; out_len];
     let mut norm_buf = vec![0.0_f32; out_len];
 
@@ -107,7 +107,7 @@ fn run_phase_vocoder(samples: &[f32], stretch_factor: f32) -> Result<Vec<f32>, A
             phases[k] = frame_buf[k].arg();
         }
 
-        pv.process_frame(&mags, &phases, &mut out_mags, &mut out_phases);
+        phase_vocoder.process_frame(&mags, &phases, &mut out_mags, &mut out_phases);
 
         // Reconstruct a conjugate-symmetric spectrum for real-valued IFFT output.
         for k in 0..num_bins {
@@ -126,19 +126,19 @@ fn run_phase_vocoder(samples: &[f32], stretch_factor: f32) -> Result<Vec<f32>, A
 
         // Overlap-add with synthesis Hann window; track per-sample normalization.
         for j in 0..fft_size {
-            let w = hann[j];
-            output[out_pos + j] += frame_buf[j].re * w;
-            norm_buf[out_pos + j] += w * w;
+            let win_coeff = hann[j];
+            output[out_pos + j] += frame_buf[j].re * win_coeff;
+            norm_buf[out_pos + j] += win_coeff * win_coeff;
         }
 
-        in_pos += hop_a;
-        out_pos += hop_s;
+        in_pos += hop_analysis;
+        out_pos += hop_synthesis;
     }
 
     // Divide out the window power accumulation (handles non-uniform edge overlap).
-    for (o, &norm) in output.iter_mut().zip(norm_buf.iter()) {
-        if norm > 1e-8 {
-            *o /= norm;
+    for (sample, &window_power) in output.iter_mut().zip(norm_buf.iter()) {
+        if window_power > 1e-8 {
+            *sample /= window_power;
         }
     }
 
@@ -153,21 +153,22 @@ fn run_phase_vocoder(samples: &[f32], stretch_factor: f32) -> Result<Vec<f32>, A
 /// Downsampling by `pitch_ratio` compresses the signal in time, raising the
 /// apparent pitch by `pitch_ratio` when played at the original sample rate.
 fn resample_pitch(samples: Vec<f32>, pitch_ratio: f32) -> Result<Vec<f32>, AnalysisError> {
-    // down/up ≈ pitch_ratio with denominator Q.
-    const Q: usize = 1000;
-    let down = (pitch_ratio * Q as f32).round() as usize;
+    // down/up ≈ pitch_ratio with denominator RESAMPLE_DENOMINATOR.
+    const RESAMPLE_DENOMINATOR: usize = 1000;
+    let down = (pitch_ratio * RESAMPLE_DENOMINATOR as f32).round() as usize;
     if down == 0 {
         return Err(AnalysisError::InvalidParameter {
             name: "pitch_semitones",
             reason: "results in zero output rate",
         });
     }
-    // up=Q, down=round(pitch_ratio*Q): output has input.len() * Q / down samples.
-    let mut resampler =
-        PolyphaseResampler::new(Q, down).ok_or(AnalysisError::InvalidParameter {
+    // up=RESAMPLE_DENOMINATOR, down=round(pitch_ratio*RESAMPLE_DENOMINATOR): output has input.len() * RESAMPLE_DENOMINATOR / down samples.
+    let mut resampler = PolyphaseResampler::new(RESAMPLE_DENOMINATOR, down).ok_or(
+        AnalysisError::InvalidParameter {
             name: "pitch_semitones",
             reason: "resampler construction failed for the requested pitch ratio",
-        })?;
+        },
+    )?;
     Ok(resampler.process(&samples))
 }
 
