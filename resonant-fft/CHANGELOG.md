@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-01
+
+### Added
+- `PhaseVocoder` — frame-by-frame phase vocoder for time-stretching and pitch-shifting;
+  accumulates and propagates phase between overlapping STFT frames; configurable stretch
+  factor with `hop_synthesis = hop_analysis × stretch_factor`; `reset()` clears the phase
+  accumulator for seek operations
+
 ## [0.3.0] - 2026-04-19
 
 ### Added

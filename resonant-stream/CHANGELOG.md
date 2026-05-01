@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-01
+
+### Added
+- `AudioInput` — `DspNode` that reads frames from the default audio input device via `cpal`;
+  spawns a background stream on construction; frames are delivered to the pipeline by
+  draining a ring buffer that the `cpal` callback fills (requires `io` feature)
+- `AudioOutput` — `DspNode` that writes frames to the default audio output device via `cpal`
+  (requires `io` feature)
+- `IoError` — error type covering `DeviceNotAvailable`, `UnsupportedFormat`, and
+  `StreamError` variants for I/O node failures (requires `io` feature)
+
 ## [0.3.0] - 2026-04-19
 
 ### Changed

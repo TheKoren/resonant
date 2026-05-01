@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-01
+
+### Changed
+- `serde` feature now covers only no-alloc types: `BiquadCoeffs`, `BiquadState`, and
+  `FilterError`; callers using `features = ["serde"]` on a `no_std`/no-alloc target no
+  longer inadvertently pull in `alloc`
+- New `serde-alloc` feature gates serialisation of `FrequencyResponse` (which contains
+  `Vec` fields); downstream `std` crates that previously used `features = ["serde"]` and
+  needed `FrequencyResponse` serialisation should migrate to `features = ["serde-alloc"]`
+
 ## [0.3.0] - 2026-04-19
 
 ### Added

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-01
+
+### Added
+- `AnalysisFlags` — bitmask type for selective analysis; individual flags: `TEMPO`,
+  `ONSETS`, `KEY`, `LOUDNESS`, `MFCC`; combine with `|`; `ALL` runs every algorithm
+- `AudioFile::analyse_with(flags)` — run only the algorithms covered by `flags`;
+  skipped fields are `None` or empty `Vec`; `analyse()` is now a thin wrapper over
+  `analyse_with(AnalysisFlags::ALL)`
+- `AnalysisResult::mfcc` — MFCC frames (one per STFT hop) restored to the analysis
+  output; empty if the signal is too short for a full frame
+- `AudioFile::into_stream_source()` — consumes the `AudioFile` and returns an
+  `AudioStreamSource` that implements `DspNode`, bridging a decoded file into a
+  `resonant-stream` pipeline without copying the sample buffer
+- Re-export: `MfccFrame` from `resonant-analysis`
+
+### Fixed
+- `AudioFile::analyse()` now uses ITU-R BS.1770-4 channel-weighted downmix for LUFS
+  measurement on stereo files (`output = (L + R) / √2`); previously the naive mono
+  average `(L + R) / 2` underreported integrated loudness by ~3 LU on stereo content
+- `AudioFile::with_analysis_window()` now propagates the configured window size to the
+  internal `TempoEstimator` (via `OnsetDetector`), matching the existing behaviour for
+  onset and chroma extraction
+
 ## [0.3.0] - 2026-04-19
 
 ### Added

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-01
+
+No functional changes. Version bumped for workspace-wide alignment with v0.4.0.
+
 ## [0.3.0] - 2026-04-19
 
 ### Added
