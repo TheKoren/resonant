@@ -17,35 +17,75 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use crate::signal::{Domain, Signal};
 
-impl<D: Domain, const N: usize> Add for Signal<[f32; N], D> {
+impl<T, D: Domain> Add for Signal<T, D>
+where
+    T: AsMut<[f32]> + AsRef<[f32]>,
+{
     type Output = Self;
-    /// Element-wise addition. Both signals must have the same domain `D`.
+    /// Element-wise addition.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the two signals have different lengths. For fixed-size array
+    /// storage (`[f32; N]`) the lengths are equal by construction and the check
+    /// is eliminated at compile time.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resonant_core::signal::{Signal, TimeDomain};
+    ///
+    /// let a = Signal::<[f32; 3], TimeDomain>::new([1.0, 2.0, 3.0]);
+    /// let b = Signal::<[f32; 3], TimeDomain>::new([4.0, 5.0, 6.0]);
+    /// assert_eq!((a + b).data(), &[5.0, 7.0, 9.0]);
+    /// ```
     #[inline]
     fn add(self, rhs: Self) -> Self {
-        let mut data = self.into_inner();
-        let rhs_data = rhs.into_inner();
-        for (a, b) in data.iter_mut().zip(rhs_data.iter()) {
+        let mut lhs = self.into_inner();
+        let rhs = rhs.into_inner();
+        assert_eq!(
+            lhs.as_ref().len(),
+            rhs.as_ref().len(),
+            "signal length mismatch"
+        );
+        for (a, b) in lhs.as_mut().iter_mut().zip(rhs.as_ref()) {
             *a += b;
         }
-        Signal::new(data)
+        Signal::new(lhs)
     }
 }
 
-impl<D: Domain, const N: usize> Sub for Signal<[f32; N], D> {
+impl<T, D: Domain> Sub for Signal<T, D>
+where
+    T: AsMut<[f32]> + AsRef<[f32]>,
+{
     type Output = Self;
     /// Element-wise subtraction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the two signals have different lengths. For array storage the
+    /// check is eliminated at compile time.
     #[inline]
     fn sub(self, rhs: Self) -> Self {
-        let mut data = self.into_inner();
-        let rhs_data = rhs.into_inner();
-        for (a, b) in data.iter_mut().zip(rhs_data.iter()) {
+        let mut lhs = self.into_inner();
+        let rhs = rhs.into_inner();
+        assert_eq!(
+            lhs.as_ref().len(),
+            rhs.as_ref().len(),
+            "signal length mismatch"
+        );
+        for (a, b) in lhs.as_mut().iter_mut().zip(rhs.as_ref()) {
             *a -= b;
         }
-        Signal::new(data)
+        Signal::new(lhs)
     }
 }
 
-impl<D: Domain, const N: usize> Mul<f32> for Signal<[f32; N], D> {
+impl<T, D: Domain> Mul<f32> for Signal<T, D>
+where
+    T: AsMut<[f32]>,
+{
     type Output = Self;
     /// Scales every sample by `rhs`.
     ///
@@ -61,14 +101,17 @@ impl<D: Domain, const N: usize> Mul<f32> for Signal<[f32; N], D> {
     #[inline]
     fn mul(self, rhs: f32) -> Self {
         let mut data = self.into_inner();
-        for a in data.iter_mut() {
+        for a in data.as_mut().iter_mut() {
             *a *= rhs;
         }
         Signal::new(data)
     }
 }
 
-impl<D: Domain, const N: usize> Div<f32> for Signal<[f32; N], D> {
+impl<T, D: Domain> Div<f32> for Signal<T, D>
+where
+    T: AsMut<[f32]>,
+{
     type Output = Self;
     /// Divides every sample by `rhs`.
     #[inline]
@@ -77,7 +120,10 @@ impl<D: Domain, const N: usize> Div<f32> for Signal<[f32; N], D> {
     }
 }
 
-impl<D: Domain, const N: usize> Neg for Signal<[f32; N], D> {
+impl<T, D: Domain> Neg for Signal<T, D>
+where
+    T: AsMut<[f32]>,
+{
     type Output = Self;
     /// Negates every sample.
     #[inline]
@@ -86,11 +132,19 @@ impl<D: Domain, const N: usize> Neg for Signal<[f32; N], D> {
     }
 }
 
-impl<D: Domain, const N: usize> Signal<[f32; N], D> {
+impl<T, D: Domain> Signal<T, D>
+where
+    T: AsRef<[f32]> + AsMut<[f32]> + Clone,
+{
     /// Returns a new signal equal to `self + other * gain`.
     ///
     /// Useful for wet/dry blending and cross-fading. Both signals must be in
     /// the same domain.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the two signals have different lengths. For array storage the
+    /// check is eliminated at compile time.
     ///
     /// # Examples
     ///
@@ -104,126 +158,11 @@ impl<D: Domain, const N: usize> Signal<[f32; N], D> {
     /// ```
     #[must_use]
     pub fn mix(&self, other: &Self, gain: f32) -> Self {
-        let mut data = *self.data();
-        for (a, b) in data.iter_mut().zip(other.data().iter()) {
+        assert_eq!(self.len(), other.len(), "signal length mismatch");
+        let mut data = self.data().clone();
+        for (a, b) in data.as_mut().iter_mut().zip(other.data().as_ref()) {
             *a += b * gain;
         }
-        Signal::new(data)
-    }
-}
-
-#[cfg(feature = "alloc")]
-extern crate alloc;
-
-#[cfg(feature = "alloc")]
-use alloc::vec::Vec;
-
-#[cfg(feature = "alloc")]
-impl<D: Domain> Add for Signal<Vec<f32>, D> {
-    type Output = Self;
-    /// Element-wise addition.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the two signals have different lengths.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use resonant_core::signal::{Signal, TimeDomain};
-    ///
-    /// let a = Signal::<Vec<f32>, TimeDomain>::new(vec![1.0, 2.0, 3.0]);
-    /// let b = Signal::<Vec<f32>, TimeDomain>::new(vec![4.0, 5.0, 6.0]);
-    /// let c = a + b;
-    /// assert_eq!(c.data(), &[5.0, 7.0, 9.0]);
-    /// ```
-    fn add(self, rhs: Self) -> Self {
-        assert_eq!(self.len(), rhs.len(), "signal length mismatch");
-        let data = self
-            .into_inner()
-            .into_iter()
-            .zip(rhs.into_inner())
-            .map(|(a, b)| a + b)
-            .collect();
-        Signal::new(data)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<D: Domain> Sub for Signal<Vec<f32>, D> {
-    type Output = Self;
-    /// Element-wise subtraction.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the two signals have different lengths.
-    fn sub(self, rhs: Self) -> Self {
-        assert_eq!(self.len(), rhs.len(), "signal length mismatch");
-        let data = self
-            .into_inner()
-            .into_iter()
-            .zip(rhs.into_inner())
-            .map(|(a, b)| a - b)
-            .collect();
-        Signal::new(data)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<D: Domain> Mul<f32> for Signal<Vec<f32>, D> {
-    type Output = Self;
-    /// Scales every sample by `rhs`.
-    fn mul(self, rhs: f32) -> Self {
-        let data = self.into_inner().into_iter().map(|a| a * rhs).collect();
-        Signal::new(data)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<D: Domain> Div<f32> for Signal<Vec<f32>, D> {
-    type Output = Self;
-    /// Divides every sample by `rhs`.
-    fn div(self, rhs: f32) -> Self {
-        self * (1.0 / rhs)
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<D: Domain> Neg for Signal<Vec<f32>, D> {
-    type Output = Self;
-    /// Negates every sample.
-    fn neg(self) -> Self {
-        self * -1.0
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<D: Domain> Signal<Vec<f32>, D> {
-    /// Returns a new signal equal to `self + other * gain`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the two signals have different lengths.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use resonant_core::signal::{Signal, TimeDomain};
-    ///
-    /// let dry = Signal::<Vec<f32>, TimeDomain>::new(vec![1.0, 2.0]);
-    /// let wet = Signal::<Vec<f32>, TimeDomain>::new(vec![1.0, 1.0]);
-    /// let out = dry.mix(&wet, 0.5);
-    /// assert_eq!(out.data(), &[1.5, 2.5]);
-    /// ```
-    #[must_use]
-    pub fn mix(&self, other: &Self, gain: f32) -> Self {
-        assert_eq!(self.len(), other.len(), "signal length mismatch");
-        let data = self
-            .data()
-            .iter()
-            .zip(other.data().iter())
-            .map(|(a, b)| a + b * gain)
-            .collect();
         Signal::new(data)
     }
 }
