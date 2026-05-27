@@ -46,38 +46,21 @@ impl<T: Copy + Default, const N: usize> RingBuf<T, N> {
     /// Appends a value, overwriting the oldest element if the buffer is full.
     #[inline]
     pub fn push(&mut self, value: T) {
-        let write_idx = (self.head + self.len) % N;
-        if self.len == N {
-            // full — overwrite oldest, advance head
-            self.buf[write_idx] = value;
-            self.head = (self.head + 1) % N;
-        } else {
-            self.buf[write_idx] = value;
-            self.len += 1;
-        }
+        ops::push(&mut self.buf, &mut self.head, &mut self.len, value);
     }
 
     /// Removes and returns the oldest element, or `None` if empty.
     #[inline]
     #[must_use]
     pub fn pop(&mut self) -> Option<T> {
-        if self.len == 0 {
-            return None;
-        }
-        let value = self.buf[self.head];
-        self.head = (self.head + 1) % N;
-        self.len -= 1;
-        Some(value)
+        ops::pop(&self.buf, &mut self.head, &mut self.len)
     }
 
     /// Returns a reference to the oldest element without removing it.
     #[inline]
     #[must_use]
     pub fn peek(&self) -> Option<&T> {
-        if self.len == 0 {
-            return None;
-        }
-        Some(&self.buf[self.head])
+        ops::peek(&self.buf, self.head, self.len)
     }
 
     /// Returns `true` if the buffer contains `N` elements.
@@ -131,14 +114,7 @@ impl<T: Copy + Default, const N: usize> RingBuf<T, N> {
     #[inline]
     #[must_use]
     pub fn as_slices(&self) -> (&[T], &[T]) {
-        let tail = self.head + self.len;
-        if tail <= N {
-            // contiguous — no wrap
-            (&self.buf[self.head..tail], &[])
-        } else {
-            // wrapped: first part runs to end of array, second from start
-            (&self.buf[self.head..N], &self.buf[..tail - N])
-        }
+        ops::as_slices(&self.buf, self.head, self.len)
     }
 
     /// Removes and returns all elements from oldest to newest.
@@ -210,18 +186,12 @@ impl<'a, T: Copy + Default, const N: usize> Iterator for RingBufIter<'a, T, N> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.offset >= self.buf.len {
-            return None;
-        }
-        let idx = (self.buf.head + self.offset) % N;
-        self.offset += 1;
-        Some(&self.buf.buf[idx])
+        ops::iter_next(&self.buf.buf, self.buf.head, &mut self.offset, self.buf.len)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.buf.len - self.offset;
-        (remaining, Some(remaining))
+        ops::size_hint(self.buf.len, self.offset)
     }
 }
 
@@ -250,6 +220,91 @@ impl<T: Copy + Default, const N: usize> Iterator for RingBufDrain<'_, T, N> {
 }
 
 impl<T: Copy + Default, const N: usize> ExactSizeIterator for RingBufDrain<'_, T, N> {}
+
+/// Shared ring-buffer algorithm operating on a plain slice.
+///
+/// Both [`RingBuf`] and [`HeapRingBuf`](crate::HeapRingBuf) delegate every
+/// method to these free functions. The only structural difference between the
+/// two types is their backing storage (`[T; N]` vs `Vec<T>`); the algorithm
+/// is identical.
+///
+/// All functions accept the storage as `&[T]` / `&mut [T]` and derive the
+/// capacity from `buf.len()`, so no separate capacity parameter is needed.
+pub(crate) mod ops {
+    /// Appends `value`, overwriting the oldest element when `len == buf.len()`.
+    #[inline]
+    pub(crate) fn push<T: Copy>(buf: &mut [T], head: &mut usize, len: &mut usize, value: T) {
+        let cap = buf.len();
+        let write_idx = (*head + *len) % cap;
+        if *len == cap {
+            buf[write_idx] = value;
+            *head = (*head + 1) % cap;
+        } else {
+            buf[write_idx] = value;
+            *len += 1;
+        }
+    }
+
+    /// Removes and returns the oldest element, or `None` if empty.
+    #[inline]
+    pub(crate) fn pop<T: Copy>(buf: &[T], head: &mut usize, len: &mut usize) -> Option<T> {
+        if *len == 0 {
+            return None;
+        }
+        let value = buf[*head];
+        *head = (*head + 1) % buf.len();
+        *len -= 1;
+        Some(value)
+    }
+
+    /// Returns a reference to the oldest element without removing it.
+    #[inline]
+    pub(crate) fn peek<T>(buf: &[T], head: usize, len: usize) -> Option<&T> {
+        if len == 0 {
+            return None;
+        }
+        Some(&buf[head])
+    }
+
+    /// Returns the logical contents as two contiguous slices (oldest-first).
+    #[inline]
+    pub(crate) fn as_slices<T>(buf: &[T], head: usize, len: usize) -> (&[T], &[T]) {
+        let cap = buf.len();
+        let tail = head + len;
+        if tail <= cap {
+            (&buf[head..tail], &[])
+        } else {
+            (&buf[head..cap], &buf[..tail - cap])
+        }
+    }
+
+    /// Advances a by-reference iterator one step.
+    ///
+    /// `offset` tracks how many elements have already been yielded. Returns
+    /// `None` when `offset >= len`.
+    #[inline]
+    pub(crate) fn iter_next<'a, T>(
+        buf: &'a [T],
+        head: usize,
+        offset: &mut usize,
+        len: usize,
+    ) -> Option<&'a T> {
+        if *offset >= len {
+            return None;
+        }
+        let idx = (head + *offset) % buf.len();
+        *offset += 1;
+        Some(&buf[idx])
+    }
+
+    /// Returns the `(lower, upper)` size hint for an iterator that has yielded
+    /// `offset` elements out of a buffer currently holding `len`.
+    #[inline]
+    pub(crate) fn size_hint(len: usize, offset: usize) -> (usize, Option<usize>) {
+        let remaining = len - offset;
+        (remaining, Some(remaining))
+    }
+}
 
 #[cfg(test)]
 mod tests {
