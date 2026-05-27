@@ -7,6 +7,8 @@ extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 
+use crate::ring_buf::ops;
+
 /// A heap-allocated circular buffer with a runtime-specified capacity.
 ///
 /// Semantics mirror [`RingBuf<T, N>`](crate::RingBuf): when full, [`push`](HeapRingBuf::push)
@@ -60,37 +62,21 @@ impl<T: Copy> HeapRingBuf<T> {
     /// Appends a value, overwriting the oldest element if the buffer is full.
     #[inline]
     pub fn push(&mut self, value: T) {
-        let write_idx = (self.head + self.len) % self.capacity;
-        if self.len == self.capacity {
-            self.buf[write_idx] = value;
-            self.head = (self.head + 1) % self.capacity;
-        } else {
-            self.buf[write_idx] = value;
-            self.len += 1;
-        }
+        ops::push(&mut self.buf, &mut self.head, &mut self.len, value);
     }
 
     /// Removes and returns the oldest element, or `None` if empty.
     #[inline]
     #[must_use]
     pub fn pop(&mut self) -> Option<T> {
-        if self.len == 0 {
-            return None;
-        }
-        let value = self.buf[self.head];
-        self.head = (self.head + 1) % self.capacity;
-        self.len -= 1;
-        Some(value)
+        ops::pop(&self.buf, &mut self.head, &mut self.len)
     }
 
     /// Returns a reference to the oldest element without removing it.
     #[inline]
     #[must_use]
     pub fn peek(&self) -> Option<&T> {
-        if self.len == 0 {
-            return None;
-        }
-        Some(&self.buf[self.head])
+        ops::peek(&self.buf, self.head, self.len)
     }
 
     /// Returns the contents as two contiguous slices, oldest element first.
@@ -101,15 +87,7 @@ impl<T: Copy> HeapRingBuf<T> {
     #[inline]
     #[must_use]
     pub fn as_slices(&self) -> (&[T], &[T]) {
-        let tail = self.head + self.len;
-        if tail <= self.capacity {
-            (&self.buf[self.head..tail], &[])
-        } else {
-            (
-                &self.buf[self.head..self.capacity],
-                &self.buf[..tail - self.capacity],
-            )
-        }
+        ops::as_slices(&self.buf, self.head, self.len)
     }
 
     /// Removes and returns all elements from oldest to newest.
@@ -188,18 +166,12 @@ impl<'a, T: Copy> Iterator for HeapRingBufIter<'a, T> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.offset >= self.buf.len {
-            return None;
-        }
-        let idx = (self.buf.head + self.offset) % self.buf.capacity;
-        self.offset += 1;
-        Some(&self.buf.buf[idx])
+        ops::iter_next(&self.buf.buf, self.buf.head, &mut self.offset, self.buf.len)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.buf.len - self.offset;
-        (remaining, Some(remaining))
+        ops::size_hint(self.buf.len, self.offset)
     }
 }
 
