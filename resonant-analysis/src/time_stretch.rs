@@ -8,8 +8,9 @@ extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use core::f32::consts::{LN_2, PI};
+use core::f32::consts::LN_2;
 
+use resonant_core::window::hann_window;
 use resonant_fft::phase_vocoder::PhaseVocoder;
 use resonant_fft::{fft, ifft, Complex};
 use resonant_filters::resample::PolyphaseResampler;
@@ -179,20 +180,11 @@ fn choose_fft_size(signal_len: usize) -> usize {
     1usize << max_fft.ilog2()
 }
 
-/// Hann window of length `n`.
-fn hann_window(n: usize) -> Vec<f32> {
-    if n <= 1 {
-        return vec![1.0_f32; n];
-    }
-    let denom = (n - 1) as f32;
-    (0..n)
-        .map(|i| 0.5 - 0.5 * (2.0 * PI * i as f32 / denom).cos())
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     extern crate std;
+
+    use core::f32::consts::PI;
 
     use super::*;
     use crate::pitch::YinEstimator;

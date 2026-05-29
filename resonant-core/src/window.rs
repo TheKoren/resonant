@@ -17,6 +17,9 @@ use num_traits::float::Float as _;
 
 use crate::sample::Sample;
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 /// Applies a Hann window in-place.
 ///
 /// The Hann window tapers to zero at both endpoints, reducing spectral
@@ -177,6 +180,102 @@ pub fn bartlett<S: Sample>(samples: &mut [S]) {
 /// ```
 pub fn apply(samples: &mut [f32], window: &[f32]) {
     crate::simd::multiply_buffers(samples, window);
+}
+
+/// Returns a Hann window of length `n` as a `Vec<f32>`.
+///
+/// Equivalent to calling [`hann`] on a buffer of ones. Useful when the same
+/// window must be applied across many frames — compute once, then pass to
+/// [`apply`] on each frame.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_core::window;
+///
+/// let w = window::hann_window(5);
+/// assert_eq!(w.len(), 5);
+/// assert!(w[0].abs() < 1e-6);
+/// assert!(w[4].abs() < 1e-6);
+/// assert!((w[2] - 1.0).abs() < 1e-6);
+/// ```
+#[cfg(feature = "alloc")]
+pub fn hann_window(n: usize) -> alloc::vec::Vec<f32> {
+    let mut buf = alloc::vec![1.0_f32; n];
+    hann(&mut buf);
+    buf
+}
+
+/// Returns a Hamming window of length `n` as a `Vec<f32>`.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_core::window;
+///
+/// let w = window::hamming_window(5);
+/// assert_eq!(w.len(), 5);
+/// assert!((w[0] - 0.08).abs() < 1e-4);
+/// ```
+#[cfg(feature = "alloc")]
+pub fn hamming_window(n: usize) -> alloc::vec::Vec<f32> {
+    let mut buf = alloc::vec![1.0_f32; n];
+    hamming(&mut buf);
+    buf
+}
+
+/// Returns a Blackman window of length `n` as a `Vec<f32>`.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_core::window;
+///
+/// let w = window::blackman_window(5);
+/// assert_eq!(w.len(), 5);
+/// assert!(w[0].abs() < 0.01);
+/// assert!(w[4].abs() < 0.01);
+/// ```
+#[cfg(feature = "alloc")]
+pub fn blackman_window(n: usize) -> alloc::vec::Vec<f32> {
+    let mut buf = alloc::vec![1.0_f32; n];
+    blackman(&mut buf);
+    buf
+}
+
+/// Returns a rectangular (all-ones) window of length `n` as a `Vec<f32>`.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_core::window;
+///
+/// let w = window::rectangular_window(4);
+/// assert_eq!(w, vec![1.0_f32; 4]);
+/// ```
+#[cfg(feature = "alloc")]
+pub fn rectangular_window(n: usize) -> alloc::vec::Vec<f32> {
+    alloc::vec![1.0_f32; n]
+}
+
+/// Returns a Bartlett (triangular) window of length `n` as a `Vec<f32>`.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_core::window;
+///
+/// let w = window::bartlett_window(5);
+/// assert_eq!(w.len(), 5);
+/// assert!(w[0].abs() < 1e-6);
+/// assert!((w[2] - 1.0).abs() < 1e-6);
+/// assert!(w[4].abs() < 1e-6);
+/// ```
+#[cfg(feature = "alloc")]
+pub fn bartlett_window(n: usize) -> alloc::vec::Vec<f32> {
+    let mut buf = alloc::vec![1.0_f32; n];
+    bartlett(&mut buf);
+    buf
 }
 
 #[cfg(test)]
@@ -371,6 +470,58 @@ mod tests {
                 buf[i] <= after_first[i] + 1e-6,
                 "second hann did not reduce value at {i}"
             );
+        }
+    }
+
+    #[cfg(feature = "alloc")]
+    mod alloc_tests {
+        use super::*;
+
+        #[test]
+        fn hann_window_matches_inplace() {
+            let w = hann_window(16);
+            let mut buf = alloc::vec![1.0_f32; 16];
+            hann(&mut buf);
+            assert_eq!(w, buf);
+        }
+
+        #[test]
+        fn hamming_window_matches_inplace() {
+            let w = hamming_window(16);
+            let mut buf = alloc::vec![1.0_f32; 16];
+            hamming(&mut buf);
+            assert_eq!(w, buf);
+        }
+
+        #[test]
+        fn blackman_window_matches_inplace() {
+            let w = blackman_window(16);
+            let mut buf = alloc::vec![1.0_f32; 16];
+            blackman(&mut buf);
+            assert_eq!(w, buf);
+        }
+
+        #[test]
+        fn rectangular_window_is_all_ones() {
+            let w = rectangular_window(8);
+            assert!(w.iter().all(|&v| v == 1.0));
+        }
+
+        #[test]
+        fn bartlett_window_matches_inplace() {
+            let w = bartlett_window(16);
+            let mut buf = alloc::vec![1.0_f32; 16];
+            bartlett(&mut buf);
+            assert_eq!(w, buf);
+        }
+
+        #[test]
+        fn window_functions_empty() {
+            assert!(hann_window(0).is_empty());
+            assert!(hamming_window(0).is_empty());
+            assert!(blackman_window(0).is_empty());
+            assert!(rectangular_window(0).is_empty());
+            assert!(bartlett_window(0).is_empty());
         }
     }
 }
