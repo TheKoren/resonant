@@ -54,22 +54,26 @@ impl<T: Clone> SlidingWindow<T> {
     }
 
     /// Pushes a single sample into the window buffer.
+    #[inline]
     pub fn push(&mut self, sample: T) {
         self.buf.push(sample);
     }
 
     /// Pushes a slice of samples into the window buffer.
+    #[inline]
     pub fn push_slice(&mut self, samples: &[T]) {
         self.buf.extend_from_slice(samples);
     }
 
     /// Returns `true` when at least `window_size` samples are buffered.
+    #[inline]
     #[must_use]
     pub fn is_ready(&self) -> bool {
         self.buf.len() >= self.window_size
     }
 
     /// Returns the current frame if enough samples are available.
+    #[inline]
     #[must_use]
     pub fn current_frame(&self) -> Option<&[T]> {
         if self.is_ready() {
@@ -80,6 +84,7 @@ impl<T: Clone> SlidingWindow<T> {
     }
 
     /// Advances the window by `hop_size`, discarding consumed samples.
+    #[inline]
     pub fn advance(&mut self) {
         if self.buf.len() >= self.hop_size {
             self.buf.drain(..self.hop_size);
@@ -89,30 +94,35 @@ impl<T: Clone> SlidingWindow<T> {
     }
 
     /// Returns the configured window size.
+    #[inline]
     #[must_use]
     pub fn window_size(&self) -> usize {
         self.window_size
     }
 
     /// Returns the configured hop size.
+    #[inline]
     #[must_use]
     pub fn hop_size(&self) -> usize {
         self.hop_size
     }
 
     /// Returns the number of samples currently buffered.
+    #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
         self.buf.len()
     }
 
     /// Returns `true` if no samples are buffered.
+    #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.buf.is_empty()
     }
 
     /// Discards all buffered samples without changing configuration.
+    #[inline]
     pub fn clear(&mut self) {
         self.buf.clear();
     }
