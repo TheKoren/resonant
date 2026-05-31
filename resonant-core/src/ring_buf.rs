@@ -236,11 +236,10 @@ pub(crate) mod ops {
     pub(crate) fn push<T: Copy>(buf: &mut [T], head: &mut usize, len: &mut usize, value: T) {
         let cap = buf.len();
         let write_idx = (*head + *len) % cap;
+        buf[write_idx] = value;
         if *len == cap {
-            buf[write_idx] = value;
             *head = (*head + 1) % cap;
         } else {
-            buf[write_idx] = value;
             *len += 1;
         }
     }
