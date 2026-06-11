@@ -43,4 +43,17 @@ cargo fmt --check
 
 ## Code of Conduct
 
-Be respectful, constructive, and collaborative. We're all here to build something useful.
+Be respectful, constructive, and collaborative. We're all here to build something useful. The project adheres to the [Rust Code of Conduct](https://github.com/rust-lang/rust/blob/main/CODE_OF_CONDUCT.md).
+
+## Usage of AI
+
+Usage of AI (LLM tools) are allowed, with the following specific rules:
+- You must review and validate every output: Without much context, tools can hallucinate APIs, introduce logic errors, produce insecure patterns, and generate code that looks correct but isn't.
+- Fully AI-generated PRs must be clearly labelled: Add label to PR and/or include a note in the PR description.
+- Do Not Submit AI-Generated Issues or Comments: Opening issues or leaving review comments that are fully AI-generated without meaningful human input is not acceptable. It wastes maintainer time.
+
+
+
+
+
+
