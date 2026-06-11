@@ -82,8 +82,7 @@ pub use rfft::{irfft, rfft};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FftError {
-    /// Input length is not a power of two (radix-2), or does not match the
-    /// planned length (rustfft plan).
+    /// Input length is not a power of two (radix-2 path only).
     NotPowerOfTwo(usize),
     /// Input is empty.
     Empty,
@@ -93,6 +92,13 @@ pub enum FftError {
         input: usize,
         /// Length of the output buffer.
         output: usize,
+    },
+    /// Buffer length does not match the length the [`FftPlan`] was created for.
+    WrongLength {
+        /// Length of the buffer passed to `fft`/`ifft`.
+        actual: usize,
+        /// Length the plan was created with.
+        planned: usize,
     },
 }
 
@@ -104,6 +110,10 @@ impl core::fmt::Display for FftError {
             Self::LengthMismatch { input, output } => {
                 write!(f, "buffer length mismatch: input {input}, output {output}")
             }
+            Self::WrongLength { actual, planned } => write!(
+                f,
+                "buffer length {actual} does not match planned FFT length {planned}"
+            ),
         }
     }
 }
@@ -122,6 +132,10 @@ mod tests {
             FftError::LengthMismatch {
                 input: 4,
                 output: 8,
+            },
+            FftError::WrongLength {
+                actual: 8,
+                planned: 4,
             },
         ] {
             let json =

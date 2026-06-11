@@ -139,11 +139,13 @@ impl FftPlan {
     ///
     /// # Errors
     ///
-    /// Returns [`FftError::NotPowerOfTwo`] if `buf.len() != self.len()`.
-    /// (The error variant name is reused; semantically it means "wrong length".)
+    /// Returns [`FftError::WrongLength`] if `buf.len() != self.len()`.
     pub fn fft(&self, buf: &mut [Complex<f32>]) -> Result<(), FftError> {
         if buf.len() != self.len {
-            return Err(FftError::NotPowerOfTwo(buf.len()));
+            return Err(FftError::WrongLength {
+                actual: buf.len(),
+                planned: self.len,
+            });
         }
         let mut scratch = vec![Complex::new(0.0_f32, 0.0); self.forward.get_inplace_scratch_len()];
         self.forward.process_with_scratch(buf, &mut scratch);
@@ -154,10 +156,13 @@ impl FftPlan {
     ///
     /// # Errors
     ///
-    /// Returns [`FftError::NotPowerOfTwo`] if `buf.len() != self.len()`.
+    /// Returns [`FftError::WrongLength`] if `buf.len() != self.len()`.
     pub fn ifft(&self, buf: &mut [Complex<f32>]) -> Result<(), FftError> {
         if buf.len() != self.len {
-            return Err(FftError::NotPowerOfTwo(buf.len()));
+            return Err(FftError::WrongLength {
+                actual: buf.len(),
+                planned: self.len,
+            });
         }
         let mut scratch = vec![Complex::new(0.0_f32, 0.0); self.inverse.get_inplace_scratch_len()];
         self.inverse.process_with_scratch(buf, &mut scratch);
@@ -249,8 +254,9 @@ mod tests {
     fn plan_wrong_length() {
         let plan = FftPlan::new(4);
         let mut buf = vec![c(0.0, 0.0); 8];
-        assert_eq!(plan.fft(&mut buf), Err(FftError::NotPowerOfTwo(8)));
-        assert_eq!(plan.ifft(&mut buf), Err(FftError::NotPowerOfTwo(8)));
+        let expected = FftError::WrongLength { actual: 8, planned: 4 };
+        assert_eq!(plan.fft(&mut buf), Err(expected));
+        assert_eq!(plan.ifft(&mut buf), Err(expected));
     }
 
     #[test]
