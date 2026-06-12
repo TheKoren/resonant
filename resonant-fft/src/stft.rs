@@ -99,6 +99,12 @@ impl Stft {
 
     /// Reconstructs a time-domain signal from STFT frames via overlap-add.
     ///
+    /// After summing IFFT'd frames, each output sample is divided by the
+    /// accumulated sum of squared window coefficients at that position. This
+    /// corrects the amplitude for any window/hop combination where the window
+    /// power sum is non-constant (samples where the sum is ≤ 1e-8 are left at
+    /// zero, which only occurs at zero-valued window endpoints).
+    ///
     /// # Errors
     ///
     /// Returns [`FftError`] if the IFFT fails on any frame.
@@ -112,12 +118,30 @@ impl Stft {
 
         let output_len = (frames.len() - 1) * self.hop_size + self.window_size;
         let mut output = vec![0.0_f32; output_len];
+        let mut norm_buf = vec![0.0_f32; output_len];
+
+        // Compute window shape by applying wfn to a unit buffer; all-ones when
+        // no window is set (rectangular).
+        let window_weights: Vec<f32> = if let Some(wfn) = self.window_fn {
+            let mut w = vec![1.0_f32; self.window_size];
+            wfn(&mut w);
+            w
+        } else {
+            vec![1.0_f32; self.window_size]
+        };
 
         for (i, frame) in frames.iter().enumerate() {
             let time_frame = self.synthesize_frame(frame)?;
             let offset = i * self.hop_size;
             for (j, &sample) in time_frame.iter().enumerate() {
                 output[offset + j] += sample;
+                norm_buf[offset + j] += window_weights[j] * window_weights[j];
+            }
+        }
+
+        for (out, &norm) in output.iter_mut().zip(norm_buf.iter()) {
+            if norm > 1e-8 {
+                *out /= norm;
             }
         }
 

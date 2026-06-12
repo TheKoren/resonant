@@ -57,3 +57,27 @@ fn accessors_match_config() {
     assert_eq!(stft.window_size(), 1024);
     assert_eq!(stft.hop_size(), 256);
 }
+
+#[test]
+fn roundtrip_hann_50pct_overlap() {
+    // Hann + 50% hop: the per-sample squared-window normalization pass must
+    // correct the amplitude. Without it, output ≈ 0.25 × original.
+    // Sample 0 and the last sample land on the zero-valued Hann endpoint of a
+    // single frame and cannot be reconstructed — only interior samples are checked.
+    let original: Vec<f32> = (0..128)
+        .map(|i| (i as f32 / 128.0 * 2.0 * core::f32::consts::PI).sin())
+        .collect();
+    let sig = Signal::from_samples(original.clone());
+    let stft = Stft::builder(32, 16)
+        .window_fn(resonant_core::window::hann)
+        .build();
+    let frames = stft.analyze(&sig).unwrap();
+    let out = stft.synthesize(&frames).unwrap();
+    let out_len = out.data().len();
+    for (a, b) in out.data()[1..out_len - 1]
+        .iter()
+        .zip(original[1..out_len - 1].iter())
+    {
+        assert!((a - b).abs() < 1e-3, "mismatch: got {a}, expected {b}");
+    }
+}
