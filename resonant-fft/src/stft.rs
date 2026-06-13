@@ -33,7 +33,8 @@ pub type StftFrame = Signal<Vec<Complex<f32>>, FreqDomain>;
 pub struct Stft {
     window_size: usize,
     hop_size: usize,
-    window_fn: Option<fn(&mut [f32])>,
+    analysis_window_fn: Option<fn(&mut [f32])>,
+    synthesis_window_fn: Option<fn(&mut [f32])>,
 }
 
 /// Builder for [`Stft`] configuration.
@@ -41,7 +42,8 @@ pub struct Stft {
 pub struct StftBuilder {
     window_size: usize,
     hop_size: usize,
-    window_fn: Option<fn(&mut [f32])>,
+    analysis_window_fn: Option<fn(&mut [f32])>,
+    synthesis_window_fn: Option<fn(&mut [f32])>,
 }
 
 impl Stft {
@@ -66,6 +68,18 @@ impl Stft {
     #[must_use]
     pub fn hop_size(&self) -> usize {
         self.hop_size
+    }
+
+    /// Returns the analysis window function, if set.
+    #[must_use]
+    pub fn analysis_window_fn(&self) -> Option<fn(&mut [f32])> {
+        self.analysis_window_fn
+    }
+
+    /// Returns the synthesis window function, if set.
+    #[must_use]
+    pub fn synthesis_window_fn(&self) -> Option<fn(&mut [f32])> {
+        self.synthesis_window_fn
     }
 
     /// Splits a time-domain signal into overlapping windowed frames and
@@ -120,9 +134,9 @@ impl Stft {
         let mut output = vec![0.0_f32; output_len];
         let mut norm_buf = vec![0.0_f32; output_len];
 
-        // Compute window shape by applying wfn to a unit buffer; all-ones when
-        // no window is set (rectangular).
-        let window_weights: Vec<f32> = if let Some(wfn) = self.window_fn {
+        // Norm is driven by the synthesis window: w_syn²(n) accumulated per output
+        // sample. All-ones when no synthesis window is set (rectangular).
+        let window_weights: Vec<f32> = if let Some(wfn) = self.synthesis_window_fn {
             let mut w = vec![1.0_f32; self.window_size];
             wfn(&mut w);
             w
@@ -148,12 +162,12 @@ impl Stft {
         Ok(Signal::new(output))
     }
 
-    /// Analyzes a single frame: apply window, then FFT.
+    /// Analyzes a single frame: apply analysis window, then FFT.
     fn analyze_frame(&self, frame: &[f32]) -> Result<StftFrame, FftError> {
         let mut windowed = vec![0.0_f32; self.window_size];
         windowed.copy_from_slice(frame);
 
-        if let Some(wfn) = self.window_fn {
+        if let Some(wfn) = self.analysis_window_fn {
             wfn(&mut windowed);
         }
 
@@ -169,7 +183,7 @@ impl Stft {
         crate::ext::run_fft_inverse(&mut buf)?;
         let mut real: Vec<f32> = buf.iter().map(|c| c.re).collect();
 
-        if let Some(wfn) = self.window_fn {
+        if let Some(wfn) = self.synthesis_window_fn {
             wfn(&mut real);
         }
 
@@ -192,18 +206,48 @@ impl StftBuilder {
         Self {
             window_size,
             hop_size,
-            window_fn: None,
+            analysis_window_fn: None,
+            synthesis_window_fn: None,
         }
     }
 
-    /// Sets the window function applied to each frame during analysis
-    /// and synthesis.
+    /// Sets the same window function for both analysis and synthesis.
     ///
-    /// Use functions from `resonant_core::window` (e.g. `window::hann`).
-    /// If not set, no windowing is applied (rectangular window).
+    /// This is the common case. For perfect reconstruction with Hann at 50% hop
+    /// the effective window is `w²(n)`, which is corrected by the normalization
+    /// pass in [`Stft::synthesize`]. For asymmetric cases — e.g. analysis Hann
+    /// with a rectangular synthesis window — use [`analysis_window_fn`] and
+    /// [`synthesis_window_fn`] separately.
+    ///
+    /// [`analysis_window_fn`]: StftBuilder::analysis_window_fn
+    /// [`synthesis_window_fn`]: StftBuilder::synthesis_window_fn
     #[must_use]
     pub fn window_fn(mut self, f: fn(&mut [f32])) -> Self {
-        self.window_fn = Some(f);
+        self.analysis_window_fn = Some(f);
+        self.synthesis_window_fn = Some(f);
+        self
+    }
+
+    /// Sets the window function applied during analysis only.
+    ///
+    /// Leaves the synthesis window unchanged. Use together with
+    /// [`synthesis_window_fn`] when analysis and synthesis windows should differ.
+    ///
+    /// [`synthesis_window_fn`]: StftBuilder::synthesis_window_fn
+    #[must_use]
+    pub fn analysis_window_fn(mut self, f: fn(&mut [f32])) -> Self {
+        self.analysis_window_fn = Some(f);
+        self
+    }
+
+    /// Sets the window function applied during synthesis only.
+    ///
+    /// Leaves the analysis window unchanged. The normalization buffer in
+    /// [`Stft::synthesize`] is driven by this window, so setting only the
+    /// synthesis window is enough for amplitude-correct OLA.
+    #[must_use]
+    pub fn synthesis_window_fn(mut self, f: fn(&mut [f32])) -> Self {
+        self.synthesis_window_fn = Some(f);
         self
     }
 
@@ -213,7 +257,8 @@ impl StftBuilder {
         Stft {
             window_size: self.window_size,
             hop_size: self.hop_size,
-            window_fn: self.window_fn,
+            analysis_window_fn: self.analysis_window_fn,
+            synthesis_window_fn: self.synthesis_window_fn,
         }
     }
 }
@@ -314,6 +359,35 @@ mod tests {
     #[should_panic(expected = "hop_size must be <= window_size")]
     fn hop_larger_than_window_panics() {
         let _ = Stft::builder(16, 32);
+    }
+
+    #[test]
+    fn window_fn_sets_both_windows() {
+        let stft = Stft::builder(16, 8)
+            .window_fn(resonant_core::window::hann)
+            .build();
+        assert!(stft.analysis_window_fn().is_some());
+        assert!(stft.synthesis_window_fn().is_some());
+    }
+
+    #[test]
+    fn analysis_only_window_tapers_output() {
+        // Analysis window applied, synthesis window absent (rectangular).
+        // With non-overlapping hop, norm = 1.0 everywhere, so the synthesized
+        // output equals IFFT(FFT(hann * x)) = hann * x — not x itself.
+        let original = std::vec![1.0_f32; 16];
+        let sig = Signal::from_samples(original.clone());
+        let stft = Stft::builder(16, 16)
+            .analysis_window_fn(resonant_core::window::hann)
+            .build();
+        let frames = stft.analyze(&sig).unwrap();
+        let out = stft.synthesize(&frames).unwrap();
+
+        let mut expected = original.clone();
+        resonant_core::window::hann(&mut expected);
+        for (a, b) in out.data().iter().zip(expected.iter()) {
+            assert!((a - b).abs() < 1e-3, "got {a}, expected {b}");
+        }
     }
 
     #[test]
