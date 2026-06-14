@@ -1,7 +1,12 @@
 //! Pure-core radix-2 Cooley-Tukey FFT.
 //!
 //! In-place, iterative, power-of-two sizes only. No allocation required.
-//! Twiddle factors are computed on-the-fly.
+//! Twiddle factors are computed on-the-fly (one `cos`/`sin` pair per butterfly).
+//! For an N-point FFT this means N/2 · log₂N trig evaluations per call —
+//! roughly 22 000 for N=2048. On hard-float targets the overhead is modest;
+//! on soft-float MCUs it dominates. Enable the `rustfft` feature for
+//! performance-sensitive code: [`FftPlan`](crate::rustfft_backend::FftPlan)
+//! precomputes twiddle factors and supports arbitrary sizes.
 
 use core::f32::consts::PI;
 
@@ -47,6 +52,10 @@ fn butterfly_stages(buf: &mut [Complex<f32>], log_n: u32, inverse: bool) {
     let n = buf.len();
     let sign = if inverse { 1.0 } else { -1.0 };
 
+    // Twiddle factors are recomputed per butterfly rather than precomputed
+    // because this module is no_alloc: a precomputed table would require
+    // either a scratch allocation or a const-generic array. Enable the
+    // `rustfft` feature for precomputed twiddles and arbitrary FFT sizes.
     for s in 0..log_n {
         let m = 1 << (s + 1);
         let half_m = 1 << s;
