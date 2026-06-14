@@ -139,6 +139,7 @@ impl PhaseVocoder {
     /// # Panics
     ///
     /// Panics if any slice length is not `fft_size / 2 + 1`.
+    #[inline]
     pub fn process_frame(
         &mut self,
         magnitudes: &[f32],
