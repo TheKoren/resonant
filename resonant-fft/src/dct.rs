@@ -39,12 +39,12 @@ use crate::FftError;
 pub fn dct_ii(input: &[f32], output: &mut [f32]) -> Result<(), FftError> {
     validate(input, output)?;
     let n = input.len();
-    let scale = PI / n as f32;
+    let pi_over_n = PI / n as f32;
 
     for (k, out) in output.iter_mut().enumerate() {
         let mut sum = 0.0_f32;
         for (i, &x) in input.iter().enumerate() {
-            sum += x * (scale * (i as f32 + 0.5) * k as f32).cos();
+            sum += x * (pi_over_n * (i as f32 + 0.5) * k as f32).cos();
         }
         *out = sum;
     }
@@ -83,13 +83,13 @@ pub fn dct_ii(input: &[f32], output: &mut [f32]) -> Result<(), FftError> {
 pub fn dct_iii(input: &[f32], output: &mut [f32]) -> Result<(), FftError> {
     validate(input, output)?;
     let n = input.len();
-    let scale = PI / n as f32;
+    let pi_over_n = PI / n as f32;
     let half_x0 = 0.5 * input[0];
 
     for (i, out) in output.iter_mut().enumerate() {
         let mut sum = half_x0;
         for (k, &x) in input.iter().enumerate().skip(1) {
-            sum += x * (scale * k as f32 * (i as f32 + 0.5)).cos();
+            sum += x * (pi_over_n * k as f32 * (i as f32 + 0.5)).cos();
         }
         *out = sum;
     }
