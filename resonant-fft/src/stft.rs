@@ -164,14 +164,18 @@ impl Stft {
 
     /// Analyzes a single frame: apply analysis window, then FFT.
     fn analyze_frame(&self, frame: &[f32]) -> Result<StftFrame, FftError> {
-        let mut windowed = vec![0.0_f32; self.window_size];
-        windowed.copy_from_slice(frame);
+        let mut buf: Vec<Complex<f32>> = frame.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         if let Some(wfn) = self.analysis_window_fn {
-            wfn(&mut windowed);
+            // wfn requires a contiguous &mut [f32]; the real parts inside buf are
+            // interleaved with imaginary parts so cannot be passed directly. Apply
+            // wfn to a unit vec to obtain the coefficients, then multiply in-place.
+            let mut coefs = vec![1.0_f32; self.window_size];
+            wfn(&mut coefs);
+            for (c, w) in buf.iter_mut().zip(coefs.iter()) {
+                c.re *= w;
+            }
         }
-
-        let mut buf: Vec<Complex<f32>> = windowed.iter().map(|&s| Complex::new(s, 0.0)).collect();
 
         crate::ext::run_fft_forward(&mut buf)?;
         Ok(Signal::new(buf))
