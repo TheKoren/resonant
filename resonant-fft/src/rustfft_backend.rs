@@ -97,6 +97,7 @@ pub fn ifft(buf: &mut [Complex<f32>]) -> Result<(), FftError> {
 /// use resonant_fft::{rustfft_backend::FftPlan, Complex};
 ///
 /// let plan = FftPlan::new(1024);
+/// assert_eq!(plan.fft_size(), 1024);
 /// let mut buf = vec![Complex::new(0.0_f32, 0.0); 1024];
 /// plan.fft(&mut buf).ok();
 /// ```
@@ -123,16 +124,10 @@ impl FftPlan {
         }
     }
 
-    /// Returns the planned FFT length.
+    /// Returns the FFT size this plan was created for.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub fn fft_size(&self) -> usize {
         self.len
-    }
-
-    /// Always returns `false` — a plan is never empty (length is always > 0).
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        false
     }
 
     /// Computes the forward FFT using the precomputed plan.
@@ -239,7 +234,7 @@ mod tests {
     #[test]
     fn plan_reuse() {
         let plan = FftPlan::new(4);
-        assert_eq!(plan.len(), 4);
+        assert_eq!(plan.fft_size(), 4);
 
         let mut buf = vec![c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0), c(4.0, 0.0)];
         let original = buf.clone();
