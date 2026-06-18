@@ -249,7 +249,10 @@ mod tests {
     fn plan_wrong_length() {
         let plan = FftPlan::new(4);
         let mut buf = vec![c(0.0, 0.0); 8];
-        let expected = FftError::WrongLength { actual: 8, planned: 4 };
+        let expected = FftError::WrongLength {
+            actual: 8,
+            planned: 4,
+        };
         assert_eq!(plan.fft(&mut buf), Err(expected));
         assert_eq!(plan.ifft(&mut buf), Err(expected));
     }
