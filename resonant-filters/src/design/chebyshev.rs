@@ -10,9 +10,10 @@ use core::f64::consts::PI;
 use num_traits::float::Float as _;
 
 #[cfg(feature = "alloc")]
-use crate::response::FilterError;
-#[cfg(feature = "alloc")]
 use crate::BiquadCoeffs;
+
+#[cfg(feature = "alloc")]
+use super::DesignError;
 
 #[cfg(feature = "alloc")]
 fn validate_cheby(
@@ -20,15 +21,18 @@ fn validate_cheby(
     param_db: f64,
     cutoff_hz: f64,
     sample_rate: f64,
-) -> Result<(), FilterError> {
+) -> Result<(), DesignError> {
     if !(2..=20).contains(&order) || order % 2 != 0 {
-        return Err(FilterError::InvalidParameter);
+        return Err(DesignError::OrderOutOfRange);
     }
-    if param_db <= 0.0 || sample_rate <= 0.0 {
-        return Err(FilterError::InvalidParameter);
+    if param_db <= 0.0 {
+        return Err(DesignError::RippleOutOfRange);
+    }
+    if sample_rate <= 0.0 {
+        return Err(DesignError::SampleRateOutOfRange);
     }
     if cutoff_hz <= 0.0 || cutoff_hz >= sample_rate / 2.0 {
-        return Err(FilterError::InvalidParameter);
+        return Err(DesignError::FrequencyOutOfRange);
     }
     Ok(())
 }
@@ -47,8 +51,10 @@ fn validate_cheby(
 ///
 /// # Errors
 ///
-/// Returns [`FilterError::InvalidParameter`] if `order` is odd or outside
-/// \[2, 20\], if `ripple_db` ≤ 0, or if `cutoff_hz` is not in `(0, Nyquist)`.
+/// Returns [`DesignError::OrderOutOfRange`] if `order` is odd or outside \[2, 20\].
+/// Returns [`DesignError::RippleOutOfRange`] if `ripple_db` ≤ 0.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `cutoff_hz` is not in `(0, Nyquist)`.
 ///
 /// # Examples
 ///
@@ -68,7 +74,7 @@ pub fn chebyshev1_lowpass(
     ripple_db: f64,
     cutoff_hz: f64,
     sample_rate: f64,
-) -> Result<Vec<BiquadCoeffs>, FilterError> {
+) -> Result<Vec<BiquadCoeffs>, DesignError> {
     validate_cheby(order, ripple_db, cutoff_hz, sample_rate)?;
 
     let eps_sq = 10.0_f64.powf(ripple_db / 10.0) - 1.0;
@@ -111,14 +117,14 @@ pub fn chebyshev1_lowpass(
 ///
 /// # Errors
 ///
-/// Same conditions as [`chebyshev1_lowpass`].
+/// Same conditions as [`chebyshev1_lowpass`]; see its `# Errors` section.
 #[cfg(feature = "alloc")]
 pub fn chebyshev1_highpass(
     order: usize,
     ripple_db: f64,
     cutoff_hz: f64,
     sample_rate: f64,
-) -> Result<Vec<BiquadCoeffs>, FilterError> {
+) -> Result<Vec<BiquadCoeffs>, DesignError> {
     validate_cheby(order, ripple_db, cutoff_hz, sample_rate)?;
 
     let eps_sq = 10.0_f64.powf(ripple_db / 10.0) - 1.0;
@@ -166,14 +172,14 @@ pub fn chebyshev1_highpass(
 ///
 /// # Errors
 ///
-/// Returns [`FilterError::InvalidParameter`] for out-of-range arguments.
+/// Same conditions as [`chebyshev1_lowpass`]; `param_db` here is `stopband_db`.
 #[cfg(feature = "alloc")]
 pub fn chebyshev2_lowpass(
     order: usize,
     stopband_db: f64,
     cutoff_hz: f64,
     sample_rate: f64,
-) -> Result<Vec<BiquadCoeffs>, FilterError> {
+) -> Result<Vec<BiquadCoeffs>, DesignError> {
     validate_cheby(order, stopband_db, cutoff_hz, sample_rate)?;
 
     let eps_sq = 10.0_f64.powf(stopband_db / 10.0) - 1.0;
@@ -230,14 +236,14 @@ pub fn chebyshev2_lowpass(
 ///
 /// # Errors
 ///
-/// Returns [`FilterError::InvalidParameter`] for out-of-range arguments.
+/// Same conditions as [`chebyshev1_lowpass`]; `param_db` here is `stopband_db`.
 #[cfg(feature = "alloc")]
 pub fn chebyshev2_highpass(
     order: usize,
     stopband_db: f64,
     cutoff_hz: f64,
     sample_rate: f64,
-) -> Result<Vec<BiquadCoeffs>, FilterError> {
+) -> Result<Vec<BiquadCoeffs>, DesignError> {
     validate_cheby(order, stopband_db, cutoff_hz, sample_rate)?;
 
     let eps_sq = 10.0_f64.powf(stopband_db / 10.0) - 1.0;
