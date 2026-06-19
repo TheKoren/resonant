@@ -55,13 +55,32 @@ fn lowpass_and_highpass_complement() {
 }
 
 #[test]
-fn invalid_params_return_none() {
-    assert!(design::butterworth_lowpass(0.0, SR).is_none());
-    assert!(design::butterworth_lowpass(-1.0, SR).is_none());
-    assert!(design::butterworth_lowpass(SR / 2.0, SR).is_none());
-    assert!(design::butterworth_lowpass(100.0, 0.0).is_none());
-    assert!(design::butterworth_highpass(0.0, SR).is_none());
-    assert!(design::butterworth_highpass(SR, SR).is_none());
+fn invalid_params_return_err() {
+    use resonant_filters::DesignError;
+    assert_eq!(
+        design::butterworth_lowpass(0.0, SR),
+        Err(DesignError::FrequencyOutOfRange)
+    );
+    assert_eq!(
+        design::butterworth_lowpass(-1.0, SR),
+        Err(DesignError::FrequencyOutOfRange)
+    );
+    assert_eq!(
+        design::butterworth_lowpass(SR / 2.0, SR),
+        Err(DesignError::FrequencyOutOfRange)
+    );
+    assert_eq!(
+        design::butterworth_lowpass(100.0, 0.0),
+        Err(DesignError::SampleRateOutOfRange)
+    );
+    assert_eq!(
+        design::butterworth_highpass(0.0, SR),
+        Err(DesignError::FrequencyOutOfRange)
+    );
+    assert_eq!(
+        design::butterworth_highpass(SR, SR),
+        Err(DesignError::FrequencyOutOfRange)
+    );
 }
 
 #[test]

@@ -5,18 +5,21 @@ use num_traits::float::Float as _;
 
 use crate::BiquadCoeffs;
 
+use super::DesignError;
+
 /// Designs a second-order Butterworth lowpass filter.
 ///
 /// Returns biquad coefficients normalised for direct form II transposed.
 ///
 /// # Arguments
 ///
-/// * `cutoff_hz` — cutoff frequency in Hz (must be < `sample_rate / 2`)
-/// * `sample_rate` — sample rate in Hz
+/// * `cutoff_hz` — cutoff frequency in Hz (must be in `(0, sample_rate / 2)`)
+/// * `sample_rate` — sample rate in Hz (must be > 0)
 ///
 /// # Errors
 ///
-/// Returns `None` if `cutoff_hz` is zero, negative, or ≥ Nyquist.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `cutoff_hz` is zero, negative, or ≥ Nyquist.
 ///
 /// # Examples
 ///
@@ -29,11 +32,12 @@ use crate::BiquadCoeffs;
 /// let y = filter.process_sample(1.0);
 /// assert!(y.is_finite());
 /// ```
-#[must_use]
-pub fn butterworth_lowpass(cutoff_hz: f64, sample_rate: f64) -> Option<BiquadCoeffs> {
-    let nyquist = sample_rate / 2.0;
-    if cutoff_hz <= 0.0 || cutoff_hz >= nyquist || sample_rate <= 0.0 {
-        return None;
+pub fn butterworth_lowpass(cutoff_hz: f64, sample_rate: f64) -> Result<BiquadCoeffs, DesignError> {
+    if sample_rate <= 0.0 {
+        return Err(DesignError::SampleRateOutOfRange);
+    }
+    if cutoff_hz <= 0.0 || cutoff_hz >= sample_rate / 2.0 {
+        return Err(DesignError::FrequencyOutOfRange);
     }
 
     // Bilinear transform pre-warp
@@ -49,7 +53,7 @@ pub fn butterworth_lowpass(cutoff_hz: f64, sample_rate: f64) -> Option<BiquadCoe
     let a1 = 2.0 * (k2 - 1.0) * norm;
     let a2 = (1.0 - sqrt2 * k + k2) * norm;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: b0 as f32,
         b1: b1 as f32,
         b2: b2 as f32,
@@ -64,12 +68,13 @@ pub fn butterworth_lowpass(cutoff_hz: f64, sample_rate: f64) -> Option<BiquadCoe
 ///
 /// # Arguments
 ///
-/// * `cutoff_hz` — cutoff frequency in Hz (must be < `sample_rate / 2`)
-/// * `sample_rate` — sample rate in Hz
+/// * `cutoff_hz` — cutoff frequency in Hz (must be in `(0, sample_rate / 2)`)
+/// * `sample_rate` — sample rate in Hz (must be > 0)
 ///
 /// # Errors
 ///
-/// Returns `None` if `cutoff_hz` is zero, negative, or ≥ Nyquist.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `cutoff_hz` is zero, negative, or ≥ Nyquist.
 ///
 /// # Examples
 ///
@@ -82,11 +87,15 @@ pub fn butterworth_lowpass(cutoff_hz: f64, sample_rate: f64) -> Option<BiquadCoe
 /// let y = filter.process_sample(1.0);
 /// assert!(y.is_finite());
 /// ```
-#[must_use]
-pub fn butterworth_highpass(cutoff_hz: f64, sample_rate: f64) -> Option<BiquadCoeffs> {
-    let nyquist = sample_rate / 2.0;
-    if cutoff_hz <= 0.0 || cutoff_hz >= nyquist || sample_rate <= 0.0 {
-        return None;
+pub fn butterworth_highpass(
+    cutoff_hz: f64,
+    sample_rate: f64,
+) -> Result<BiquadCoeffs, DesignError> {
+    if sample_rate <= 0.0 {
+        return Err(DesignError::SampleRateOutOfRange);
+    }
+    if cutoff_hz <= 0.0 || cutoff_hz >= sample_rate / 2.0 {
+        return Err(DesignError::FrequencyOutOfRange);
     }
 
     let wc = 2.0 * PI * cutoff_hz / sample_rate;
@@ -101,7 +110,7 @@ pub fn butterworth_highpass(cutoff_hz: f64, sample_rate: f64) -> Option<BiquadCo
     let a1 = 2.0 * (k2 - 1.0) * norm;
     let a2 = (1.0 - sqrt2 * k + k2) * norm;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: b0 as f32,
         b1: b1 as f32,
         b2: b2 as f32,
@@ -118,33 +127,48 @@ mod tests {
     const SR: f64 = 44100.0;
 
     #[test]
-    fn lowpass_returns_some_for_valid_params() {
-        assert!(butterworth_lowpass(1000.0, SR).is_some());
+    fn lowpass_ok_for_valid_params() {
+        assert!(butterworth_lowpass(1000.0, SR).is_ok());
     }
 
     #[test]
-    fn lowpass_none_for_zero_cutoff() {
-        assert!(butterworth_lowpass(0.0, SR).is_none());
+    fn lowpass_err_for_zero_cutoff() {
+        assert_eq!(
+            butterworth_lowpass(0.0, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
     }
 
     #[test]
-    fn lowpass_none_for_negative_cutoff() {
-        assert!(butterworth_lowpass(-100.0, SR).is_none());
+    fn lowpass_err_for_negative_cutoff() {
+        assert_eq!(
+            butterworth_lowpass(-100.0, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
     }
 
     #[test]
-    fn lowpass_none_at_nyquist() {
-        assert!(butterworth_lowpass(SR / 2.0, SR).is_none());
+    fn lowpass_err_at_nyquist() {
+        assert_eq!(
+            butterworth_lowpass(SR / 2.0, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
     }
 
     #[test]
-    fn lowpass_none_above_nyquist() {
-        assert!(butterworth_lowpass(SR, SR).is_none());
+    fn lowpass_err_above_nyquist() {
+        assert_eq!(
+            butterworth_lowpass(SR, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
     }
 
     #[test]
-    fn lowpass_none_for_zero_sample_rate() {
-        assert!(butterworth_lowpass(100.0, 0.0).is_none());
+    fn lowpass_err_for_zero_sample_rate() {
+        assert_eq!(
+            butterworth_lowpass(100.0, 0.0),
+            Err(DesignError::SampleRateOutOfRange)
+        );
     }
 
     #[test]
@@ -189,15 +213,24 @@ mod tests {
     }
 
     #[test]
-    fn highpass_returns_some_for_valid_params() {
-        assert!(butterworth_highpass(1000.0, SR).is_some());
+    fn highpass_ok_for_valid_params() {
+        assert!(butterworth_highpass(1000.0, SR).is_ok());
     }
 
     #[test]
-    fn highpass_none_for_invalid_params() {
-        assert!(butterworth_highpass(0.0, SR).is_none());
-        assert!(butterworth_highpass(-100.0, SR).is_none());
-        assert!(butterworth_highpass(SR / 2.0, SR).is_none());
+    fn highpass_err_for_invalid_params() {
+        assert_eq!(
+            butterworth_highpass(0.0, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            butterworth_highpass(-100.0, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            butterworth_highpass(SR / 2.0, SR),
+            Err(DesignError::FrequencyOutOfRange)
+        );
     }
 
     #[test]

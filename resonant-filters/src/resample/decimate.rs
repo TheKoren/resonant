@@ -45,7 +45,7 @@ pub fn decimate(input: &[f32], factor: usize, sample_rate: f64) -> Option<Vec<f3
     // to stay within the Butterworth design range.
     let cutoff = sample_rate / (2.0 * factor as f64) * 0.9;
 
-    let coeffs = butterworth_lowpass(cutoff, sample_rate)?;
+    let coeffs = butterworth_lowpass(cutoff, sample_rate).ok()?;
 
     // Cascade two second-order sections for 4th-order (~24 dB/oct) rolloff.
     let mut stage1 = Biquad::new(coeffs);

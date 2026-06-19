@@ -41,6 +41,7 @@ pub mod nonlinear;
 pub mod oversample;
 
 pub use biquad::{Biquad, BiquadCoeffs, BiquadState};
+pub use design::DesignError;
 #[cfg(feature = "alloc")]
 pub use fir::Fir;
 pub use nonlinear::{MoogLadder, SaturatingBiquad, StateVariableFilter, SvfOutputs};

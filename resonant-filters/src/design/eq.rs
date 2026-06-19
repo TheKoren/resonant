@@ -5,19 +5,23 @@ use num_traits::float::Float as _;
 
 use crate::BiquadCoeffs;
 
-fn validate_eq(freq_hz: f64, sample_rate: f64) -> Option<()> {
-    if freq_hz <= 0.0 || sample_rate <= 0.0 || freq_hz >= sample_rate / 2.0 {
-        None
-    } else {
-        Some(())
+use super::DesignError;
+
+fn validate_eq(freq_hz: f64, sample_rate: f64) -> Result<(), DesignError> {
+    if sample_rate <= 0.0 {
+        return Err(DesignError::SampleRateOutOfRange);
     }
+    if freq_hz <= 0.0 || freq_hz >= sample_rate / 2.0 {
+        return Err(DesignError::FrequencyOutOfRange);
+    }
+    Ok(())
 }
 
-fn validate_q(q: f64) -> Option<()> {
+fn validate_q(q: f64) -> Result<(), DesignError> {
     if q > 0.0 {
-        Some(())
+        Ok(())
     } else {
-        None
+        Err(DesignError::QOutOfRange)
     }
 }
 
@@ -33,7 +37,8 @@ fn validate_q(q: f64) -> Option<()> {
 ///
 /// # Errors
 ///
-/// Returns `None` if `cutoff_hz` is out of range or `sample_rate` ≤ 0.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `cutoff_hz` is zero, negative, or ≥ Nyquist.
 ///
 /// # Examples
 ///
@@ -42,7 +47,11 @@ fn validate_q(q: f64) -> Option<()> {
 /// let c = design::shelving_low(6.0, 200.0, 44100.0).unwrap();
 /// assert!(c.b0.is_finite());
 /// ```
-pub fn shelving_low(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
+pub fn shelving_low(
+    gain_db: f32,
+    cutoff_hz: f32,
+    sample_rate: f32,
+) -> Result<BiquadCoeffs, DesignError> {
     let freq = cutoff_hz as f64;
     let sr = sample_rate as f64;
     validate_eq(freq, sr)?;
@@ -60,7 +69,7 @@ pub fn shelving_low(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<Bi
     let a1 = -2.0 * ((a - 1.0) + (a + 1.0) * cos_w0);
     let a2 = (a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: (b0 / a0) as f32,
         b1: (b1 / a0) as f32,
         b2: (b2 / a0) as f32,
@@ -81,7 +90,8 @@ pub fn shelving_low(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<Bi
 ///
 /// # Errors
 ///
-/// Returns `None` if `cutoff_hz` is out of range or `sample_rate` ≤ 0.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `cutoff_hz` is zero, negative, or ≥ Nyquist.
 ///
 /// # Examples
 ///
@@ -90,7 +100,11 @@ pub fn shelving_low(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<Bi
 /// let c = design::shelving_high(6.0, 8000.0, 44100.0).unwrap();
 /// assert!(c.b0.is_finite());
 /// ```
-pub fn shelving_high(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
+pub fn shelving_high(
+    gain_db: f32,
+    cutoff_hz: f32,
+    sample_rate: f32,
+) -> Result<BiquadCoeffs, DesignError> {
     let freq = cutoff_hz as f64;
     let sr = sample_rate as f64;
     validate_eq(freq, sr)?;
@@ -108,7 +122,7 @@ pub fn shelving_high(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<B
     let a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0);
     let a2 = (a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: (b0 / a0) as f32,
         b1: (b1 / a0) as f32,
         b2: (b2 / a0) as f32,
@@ -130,7 +144,9 @@ pub fn shelving_high(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<B
 ///
 /// # Errors
 ///
-/// Returns `None` if any parameter is out of range.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `center_hz` is zero, negative, or ≥ Nyquist.
+/// Returns [`DesignError::QOutOfRange`] if `q` ≤ 0.
 ///
 /// # Examples
 ///
@@ -139,7 +155,12 @@ pub fn shelving_high(gain_db: f32, cutoff_hz: f32, sample_rate: f32) -> Option<B
 /// let c = design::peaking_eq(6.0, 1000.0, 1.0, 44100.0).unwrap();
 /// assert!(c.b0.is_finite());
 /// ```
-pub fn peaking_eq(gain_db: f32, center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
+pub fn peaking_eq(
+    gain_db: f32,
+    center_hz: f32,
+    q: f32,
+    sample_rate: f32,
+) -> Result<BiquadCoeffs, DesignError> {
     let freq = center_hz as f64;
     let sr = sample_rate as f64;
     let qq = q as f64;
@@ -157,7 +178,7 @@ pub fn peaking_eq(gain_db: f32, center_hz: f32, q: f32, sample_rate: f32) -> Opt
     let a1 = -2.0 * w0.cos();
     let a2 = 1.0 - alpha / a;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: (b0 / a0) as f32,
         b1: (b1 / a0) as f32,
         b2: (b2 / a0) as f32,
@@ -178,7 +199,9 @@ pub fn peaking_eq(gain_db: f32, center_hz: f32, q: f32, sample_rate: f32) -> Opt
 ///
 /// # Errors
 ///
-/// Returns `None` if any parameter is out of range.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `center_hz` is zero, negative, or ≥ Nyquist.
+/// Returns [`DesignError::QOutOfRange`] if `q` ≤ 0.
 ///
 /// # Examples
 ///
@@ -187,7 +210,7 @@ pub fn peaking_eq(gain_db: f32, center_hz: f32, q: f32, sample_rate: f32) -> Opt
 /// let c = design::notch(1000.0, 10.0, 44100.0).unwrap();
 /// assert!(c.b0.is_finite());
 /// ```
-pub fn notch(center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
+pub fn notch(center_hz: f32, q: f32, sample_rate: f32) -> Result<BiquadCoeffs, DesignError> {
     let freq = center_hz as f64;
     let sr = sample_rate as f64;
     let qq = q as f64;
@@ -204,7 +227,7 @@ pub fn notch(center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
     let a1 = -2.0 * w0.cos();
     let a2 = 1.0 - alpha;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: (b0 / a0) as f32,
         b1: (b1 / a0) as f32,
         b2: (b2 / a0) as f32,
@@ -225,7 +248,9 @@ pub fn notch(center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
 ///
 /// # Errors
 ///
-/// Returns `None` if any parameter is out of range.
+/// Returns [`DesignError::SampleRateOutOfRange`] if `sample_rate` ≤ 0.
+/// Returns [`DesignError::FrequencyOutOfRange`] if `center_hz` is zero, negative, or ≥ Nyquist.
+/// Returns [`DesignError::QOutOfRange`] if `q` ≤ 0.
 ///
 /// # Examples
 ///
@@ -234,7 +259,7 @@ pub fn notch(center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
 /// let c = design::allpass(1000.0, 0.707, 44100.0).unwrap();
 /// assert!(c.b0.is_finite());
 /// ```
-pub fn allpass(center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs> {
+pub fn allpass(center_hz: f32, q: f32, sample_rate: f32) -> Result<BiquadCoeffs, DesignError> {
     let freq = center_hz as f64;
     let sr = sample_rate as f64;
     let qq = q as f64;
@@ -251,7 +276,7 @@ pub fn allpass(center_hz: f32, q: f32, sample_rate: f32) -> Option<BiquadCoeffs>
     let a1 = -2.0 * w0.cos();
     let a2 = 1.0 - alpha;
 
-    Some(BiquadCoeffs {
+    Ok(BiquadCoeffs {
         b0: (b0 / a0) as f32,
         b1: (b1 / a0) as f32,
         b2: (b2 / a0) as f32,
@@ -324,9 +349,18 @@ mod tests {
 
     #[test]
     fn shelf_low_invalid_params() {
-        assert!(shelving_low(6.0, 0.0, SR as f32).is_none());
-        assert!(shelving_low(6.0, SR as f32 / 2.0, SR as f32).is_none());
-        assert!(shelving_low(6.0, 1000.0, 0.0).is_none());
+        assert_eq!(
+            shelving_low(6.0, 0.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            shelving_low(6.0, SR as f32 / 2.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            shelving_low(6.0, 1000.0, 0.0),
+            Err(DesignError::SampleRateOutOfRange)
+        );
     }
 
     #[test]
@@ -352,8 +386,14 @@ mod tests {
 
     #[test]
     fn shelf_high_invalid_params() {
-        assert!(shelving_high(6.0, 0.0, SR as f32).is_none());
-        assert!(shelving_high(6.0, SR as f32 / 2.0, SR as f32).is_none());
+        assert_eq!(
+            shelving_high(6.0, 0.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            shelving_high(6.0, SR as f32 / 2.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
     }
 
     #[test]
@@ -399,9 +439,18 @@ mod tests {
 
     #[test]
     fn peaking_eq_invalid_params() {
-        assert!(peaking_eq(6.0, 0.0, 1.0, SR as f32).is_none());
-        assert!(peaking_eq(6.0, 1000.0, 0.0, SR as f32).is_none());
-        assert!(peaking_eq(6.0, 1000.0, 1.0, 0.0).is_none());
+        assert_eq!(
+            peaking_eq(6.0, 0.0, 1.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            peaking_eq(6.0, 1000.0, 0.0, SR as f32),
+            Err(DesignError::QOutOfRange)
+        );
+        assert_eq!(
+            peaking_eq(6.0, 1000.0, 1.0, 0.0),
+            Err(DesignError::SampleRateOutOfRange)
+        );
     }
 
     #[test]
@@ -434,9 +483,18 @@ mod tests {
 
     #[test]
     fn notch_invalid_params() {
-        assert!(notch(0.0, 1.0, SR as f32).is_none());
-        assert!(notch(1000.0, 0.0, SR as f32).is_none());
-        assert!(notch(1000.0, 1.0, 0.0).is_none());
+        assert_eq!(
+            notch(0.0, 1.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            notch(1000.0, 0.0, SR as f32),
+            Err(DesignError::QOutOfRange)
+        );
+        assert_eq!(
+            notch(1000.0, 1.0, 0.0),
+            Err(DesignError::SampleRateOutOfRange)
+        );
     }
 
     #[test]
@@ -475,8 +533,17 @@ mod tests {
 
     #[test]
     fn allpass_invalid_params() {
-        assert!(allpass(0.0, 1.0, SR as f32).is_none());
-        assert!(allpass(1000.0, -1.0, SR as f32).is_none());
-        assert!(allpass(1000.0, 1.0, 0.0).is_none());
+        assert_eq!(
+            allpass(0.0, 1.0, SR as f32),
+            Err(DesignError::FrequencyOutOfRange)
+        );
+        assert_eq!(
+            allpass(1000.0, -1.0, SR as f32),
+            Err(DesignError::QOutOfRange)
+        );
+        assert_eq!(
+            allpass(1000.0, 1.0, 0.0),
+            Err(DesignError::SampleRateOutOfRange)
+        );
     }
 }
