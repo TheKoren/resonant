@@ -26,13 +26,16 @@ pub struct BiquadCoeffs {
 }
 
 /// Internal delay state for a biquad section.
+///
+/// `s1` and `s2` are `pub` to support state checkpointing and `serde`
+/// serialisation without a custom implementation. Do not depend on the field
+/// names remaining stable across versions; they are hidden from generated
+/// documentation to discourage direct manipulation in normal use.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BiquadState {
-    /// First delay element.
     #[doc(hidden)]
     pub s1: f32,
-    /// Second delay element.
     #[doc(hidden)]
     pub s2: f32,
 }
