@@ -23,8 +23,7 @@ pub struct SaturatingBiquad {
     pub(super) coeffs: BiquadCoeffs,
     pub(super) s1: f32,
     pub(super) s2: f32,
-    /// Saturation amount: 0.0 = linear, 1.0 = full tanh clip.
-    pub drive: f32,
+    pub(super) drive: f32,
 }
 
 impl SaturatingBiquad {
@@ -59,6 +58,19 @@ impl SaturatingBiquad {
         for s in buf.iter_mut() {
             *s = self.process_sample(*s);
         }
+    }
+
+    /// Returns the current drive amount in `[0.0, 1.0]`.
+    #[inline]
+    #[must_use]
+    pub fn drive(&self) -> f32 {
+        self.drive
+    }
+
+    /// Sets the drive amount, clamping to `[0.0, 1.0]`.
+    #[inline]
+    pub fn set_drive(&mut self, drive: f32) {
+        self.drive = drive.clamp(0.0, 1.0);
     }
 
     /// Replaces the coefficients without resetting state.
@@ -145,6 +157,39 @@ mod tests {
         f.reset();
         assert_eq!(f.s1, 0.0);
         assert_eq!(f.s2, 0.0);
+    }
+
+    #[test]
+    fn drive_getter_matches_constructed_value() {
+        let f = SaturatingBiquad::new(BiquadCoeffs::PASSTHROUGH, 0.75);
+        assert_eq!(f.drive(), 0.75);
+    }
+
+    #[test]
+    fn set_drive_clamps_above_one() {
+        let mut f = SaturatingBiquad::new(BiquadCoeffs::PASSTHROUGH, 0.5);
+        f.set_drive(2.0);
+        assert_eq!(f.drive(), 1.0);
+    }
+
+    #[test]
+    fn set_drive_clamps_below_zero() {
+        let mut f = SaturatingBiquad::new(BiquadCoeffs::PASSTHROUGH, 0.5);
+        f.set_drive(-1.0);
+        assert_eq!(f.drive(), 0.0);
+    }
+
+    #[test]
+    fn set_drive_accepts_valid_range() {
+        let mut f = SaturatingBiquad::new(BiquadCoeffs::PASSTHROUGH, 0.0);
+        f.set_drive(0.3);
+        assert_eq!(f.drive(), 0.3);
+    }
+
+    #[test]
+    fn new_clamps_drive_above_one() {
+        let f = SaturatingBiquad::new(BiquadCoeffs::PASSTHROUGH, 5.0);
+        assert_eq!(f.drive(), 1.0);
     }
 
     #[test]
