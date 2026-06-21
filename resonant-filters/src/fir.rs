@@ -25,11 +25,20 @@ use alloc::vec::Vec;
 /// let y = f.process_sample(1.0);
 /// assert!((y - 1.0 / 3.0).abs() < 1e-6);
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Fir {
     coeffs: Vec<f32>,
     delay: Vec<f32>,
     pos: usize,
+    // Linearized delay line reused across process_buf calls to avoid
+    // per-call heap allocation on the hot audio path.
+    scratch: Vec<f32>,
+}
+
+impl PartialEq for Fir {
+    fn eq(&self, other: &Self) -> bool {
+        self.coeffs == other.coeffs && self.delay == other.delay && self.pos == other.pos
+    }
 }
 
 impl Fir {
@@ -49,6 +58,7 @@ impl Fir {
             coeffs,
             delay: vec![0.0; len],
             pos: 0,
+            scratch: vec![0.0; len],
         }
     }
 
@@ -77,11 +87,11 @@ impl Fir {
     /// Filters an entire buffer in-place.
     ///
     /// For each sample, the circular delay line is linearized into a
-    /// contiguous scratch buffer so the convolution can use a SIMD
-    /// dot product.
+    /// contiguous scratch buffer so the convolution can use a SIMD dot
+    /// product. The scratch buffer is stored in the struct and reused across
+    /// calls, so this method does not allocate.
     pub fn process_buf(&mut self, buf: &mut [f32]) {
         let len = self.coeffs.len();
-        let mut scratch = vec![0.0_f32; len];
 
         for sample in buf.iter_mut() {
             self.delay[self.pos] = *sample;
@@ -90,15 +100,15 @@ impl Fir {
             // Layout: [pos, pos-1, ..., 0, len-1, len-2, ..., pos+1]
             let after = self.pos + 1;
             // First part: delay[0..=pos] reversed
-            scratch[..after].copy_from_slice(&self.delay[..after]);
-            scratch[..after].reverse();
+            self.scratch[..after].copy_from_slice(&self.delay[..after]);
+            self.scratch[..after].reverse();
             // Second part: delay[pos+1..len] reversed
             if after < len {
-                scratch[after..].copy_from_slice(&self.delay[after..]);
-                scratch[after..].reverse();
+                self.scratch[after..].copy_from_slice(&self.delay[after..]);
+                self.scratch[after..].reverse();
             }
 
-            *sample = crate::simd::dot_product(&self.coeffs, &scratch);
+            *sample = crate::simd::dot_product(&self.coeffs, &self.scratch);
             self.pos = (self.pos + 1) % len;
         }
     }
