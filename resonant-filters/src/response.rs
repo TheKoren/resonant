@@ -47,6 +47,10 @@ pub struct FrequencyResponse {
     /// Linear magnitude at each frequency.
     pub magnitudes: Vec<f32>,
     /// Phase in radians at each frequency.
+    ///
+    /// Always zero for nonlinear filter types (`MoogLadder`, `SaturatingBiquad`,
+    /// `StateVariableFilter`): phase cannot be extracted from a peak-amplitude
+    /// sine-sweep measurement.
     pub phases: Vec<f32>,
 }
 
