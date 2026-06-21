@@ -81,6 +81,7 @@ mod response_impls {
             let nyquist = sample_rate / 2.0;
             let mut frequencies = vec![0.0_f32; n_points];
             let mut magnitudes = vec![0.0_f32; n_points];
+            // Phase is not computable from a peak-amplitude sweep measurement.
             let phases = vec![0.0_f32; n_points];
             for i in 0..n_points {
                 let freq = nyquist * i as f32 / (n_points - 1) as f32;
@@ -108,6 +109,7 @@ mod response_impls {
             let nyquist = sample_rate / 2.0;
             let mut frequencies = vec![0.0_f32; n_points];
             let mut magnitudes = vec![0.0_f32; n_points];
+            // Phase is not computable from a peak-amplitude sweep measurement.
             let phases = vec![0.0_f32; n_points];
             for i in 0..n_points {
                 let freq = nyquist * i as f32 / (n_points - 1) as f32;
@@ -135,6 +137,7 @@ mod response_impls {
             let nyquist = sample_rate / 2.0;
             let mut frequencies = vec![0.0_f32; n_points];
             let mut magnitudes = vec![0.0_f32; n_points];
+            // Phase is not computable from a peak-amplitude sweep measurement.
             let phases = vec![0.0_f32; n_points];
             for i in 0..n_points {
                 let freq = nyquist * i as f32 / (n_points - 1) as f32;
