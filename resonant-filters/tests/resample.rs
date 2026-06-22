@@ -1,6 +1,6 @@
 use resonant_filters::resample::{self, PolyphaseResampler};
 
-const SR: f64 = 48000.0;
+const SR: f32 = 48000.0;
 
 #[test]
 fn decimate_by_2_halves_length() {
@@ -24,7 +24,7 @@ fn decimate_rejects_alias_frequency() {
     let n = 12000;
     let freq = 18000.0_f32;
     let input: Vec<f32> = (0..n)
-        .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR as f32).sin())
+        .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR).sin())
         .collect();
 
     let out = resample::decimate(&input, 3, SR).unwrap();
@@ -40,7 +40,7 @@ fn decimate_passes_low_tone() {
     let n = 8000;
     let freq = 200.0_f32;
     let input: Vec<f32> = (0..n)
-        .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR as f32).sin())
+        .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR).sin())
         .collect();
 
     let out = resample::decimate(&input, 2, SR).unwrap();

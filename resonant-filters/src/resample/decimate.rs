@@ -15,7 +15,7 @@ use crate::Biquad;
 ///
 /// * `input` — input samples at the original sample rate
 /// * `factor` — decimation factor (must be ≥ 2)
-/// * `sample_rate` — original sample rate in Hz
+/// * `sample_rate` — original sample rate in Hz (f32, consistent with the rest of the API)
 ///
 /// # Errors
 ///
@@ -36,16 +36,18 @@ use crate::Biquad;
 /// assert!((out.last().copied().unwrap() - 1.0).abs() < 0.01);
 /// ```
 #[must_use]
-pub fn decimate(input: &[f32], factor: usize, sample_rate: f64) -> Option<Vec<f32>> {
+pub fn decimate(input: &[f32], factor: usize, sample_rate: f32) -> Option<Vec<f32>> {
     if factor < 2 || input.is_empty() || sample_rate <= 0.0 {
         return None;
     }
 
     // Anti-alias cutoff: Nyquist of the output rate, with a small margin
     // to stay within the Butterworth design range.
-    let cutoff = sample_rate / (2.0 * factor as f64) * 0.9;
+    // Widen to f64 for the design calculation (butterworth_lowpass uses f64 internally).
+    let sr = sample_rate as f64;
+    let cutoff = sr / (2.0 * factor as f64) * 0.9;
 
-    let coeffs = butterworth_lowpass(cutoff, sample_rate).ok()?;
+    let coeffs = butterworth_lowpass(cutoff, sr).ok()?;
 
     // Cascade two second-order sections for 4th-order (~24 dB/oct) rolloff.
     let mut stage1 = Biquad::new(coeffs);
@@ -71,7 +73,7 @@ mod tests {
     use alloc::vec;
     use alloc::vec::Vec;
 
-    const SR: f64 = 48000.0;
+    const SR: f32 = 48000.0;
 
     #[test]
     fn returns_none_for_factor_below_2() {
@@ -125,7 +127,7 @@ mod tests {
         let n = 8000;
         let freq = 20000.0_f32;
         let input: Vec<f32> = (0..n)
-            .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR as f32).sin())
+            .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR).sin())
             .collect();
 
         let out = decimate(&input, 4, SR).unwrap();
@@ -142,7 +144,7 @@ mod tests {
         let n = 8000;
         let freq = 100.0_f32;
         let input: Vec<f32> = (0..n)
-            .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR as f32).sin())
+            .map(|i| (2.0 * core::f32::consts::PI * freq * i as f32 / SR).sin())
             .collect();
 
         let out = decimate(&input, 2, SR).unwrap();
