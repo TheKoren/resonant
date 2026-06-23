@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use resonant_filters::resample::{decimate, PolyphaseResampler};
 
-const SR: f64 = 44100.0;
+const SR: f32 = 44100.0;
 
 /// Compare polyphase resampler against simple integer decimation.
 fn bench_decimate_vs_polyphase(c: &mut Criterion) {
