@@ -404,13 +404,12 @@ fn kweight_coeffs(sr: f32) -> Result<(BiquadCoeffs, BiquadCoeffs), AnalysisError
                     reason: "K-weighting pre-filter design failed",
                 }
             })?;
-            let rlb =
-                design::butterworth_highpass(38.135_f64, f64::from(sr)).map_err(|_| {
-                    AnalysisError::InvalidParameter {
-                        name: "sample_rate",
-                        reason: "K-weighting RLB high-pass design failed",
-                    }
-                })?;
+            let rlb = design::butterworth_highpass(38.135_f64, f64::from(sr)).map_err(|_| {
+                AnalysisError::InvalidParameter {
+                    name: "sample_rate",
+                    reason: "K-weighting RLB high-pass design failed",
+                }
+            })?;
             Ok((pre, rlb))
         }
         _ => Err(AnalysisError::InvalidParameter {

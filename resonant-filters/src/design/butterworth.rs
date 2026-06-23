@@ -87,10 +87,7 @@ pub fn butterworth_lowpass(cutoff_hz: f64, sample_rate: f64) -> Result<BiquadCoe
 /// let y = filter.process_sample(1.0);
 /// assert!(y.is_finite());
 /// ```
-pub fn butterworth_highpass(
-    cutoff_hz: f64,
-    sample_rate: f64,
-) -> Result<BiquadCoeffs, DesignError> {
+pub fn butterworth_highpass(cutoff_hz: f64, sample_rate: f64) -> Result<BiquadCoeffs, DesignError> {
     if sample_rate <= 0.0 {
         return Err(DesignError::SampleRateOutOfRange);
     }
