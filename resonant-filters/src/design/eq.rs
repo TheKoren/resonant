@@ -487,10 +487,7 @@ mod tests {
             notch(0.0, 1.0, SR as f32),
             Err(DesignError::FrequencyOutOfRange)
         );
-        assert_eq!(
-            notch(1000.0, 0.0, SR as f32),
-            Err(DesignError::QOutOfRange)
-        );
+        assert_eq!(notch(1000.0, 0.0, SR as f32), Err(DesignError::QOutOfRange));
         assert_eq!(
             notch(1000.0, 1.0, 0.0),
             Err(DesignError::SampleRateOutOfRange)
