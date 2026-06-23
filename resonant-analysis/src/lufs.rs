@@ -398,17 +398,19 @@ fn kweight_coeffs(sr: f32) -> Result<(BiquadCoeffs, BiquadCoeffs), AnalysisError
         88200 | 96000 => {
             // Analog prototype: +4 dB high-shelf at 1681.97 Hz (pre-filter);
             // 2nd-order Butterworth HP at 38.135 Hz (RLB high-pass).
-            let pre =
-                design::shelving_high(4.0, 1681.97, sr).ok_or(AnalysisError::InvalidParameter {
-                    name: "sample_rate",
-                    reason: "K-weighting pre-filter design failed",
-                })?;
-            let rlb = design::butterworth_highpass(38.135_f64, f64::from(sr)).ok_or(
+            let pre = design::shelving_high(4.0, 1681.97, sr).map_err(|_| {
                 AnalysisError::InvalidParameter {
                     name: "sample_rate",
-                    reason: "K-weighting RLB high-pass design failed",
-                },
-            )?;
+                    reason: "K-weighting pre-filter design failed",
+                }
+            })?;
+            let rlb =
+                design::butterworth_highpass(38.135_f64, f64::from(sr)).map_err(|_| {
+                    AnalysisError::InvalidParameter {
+                        name: "sample_rate",
+                        reason: "K-weighting RLB high-pass design failed",
+                    }
+                })?;
             Ok((pre, rlb))
         }
         _ => Err(AnalysisError::InvalidParameter {

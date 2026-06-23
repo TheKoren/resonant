@@ -65,7 +65,7 @@ impl DspNode for ResampleNode {
         let channels = input.channels();
         let data = input.into_data();
 
-        let out = resample::decimate(&data, self.factor, f64::from(sr)).ok_or_else(|| {
+        let out = resample::decimate(&data, self.factor, sr as f32).ok_or_else(|| {
             StreamError::ProcessingError(format!(
                 "decimation failed (factor={}, sr={sr}, len={})",
                 self.factor,
