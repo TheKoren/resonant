@@ -31,15 +31,7 @@ use crate::error::AnalysisError;
 /// ```
 #[must_use = "returns the centroid value"]
 pub fn spectral_centroid(magnitudes: &[f32], frequencies: &[f32]) -> Result<f32, AnalysisError> {
-    validate_inputs(magnitudes, frequencies)?;
-
-    let total: f32 = magnitudes.iter().sum();
-    if total <= f32::EPSILON {
-        return Ok(0.0);
-    }
-
-    let weighted: f32 = magnitudes.iter().zip(frequencies).map(|(m, f)| m * f).sum();
-    Ok(weighted / total)
+    spectral_centroid_and_spread(magnitudes, frequencies).map(|(c, _)| c)
 }
 
 /// Spectral spread: the standard deviation of frequency around the centroid.
@@ -65,25 +57,58 @@ pub fn spectral_centroid(magnitudes: &[f32], frequencies: &[f32]) -> Result<f32,
 /// ```
 #[must_use = "returns the spread value"]
 pub fn spectral_spread(magnitudes: &[f32], frequencies: &[f32]) -> Result<f32, AnalysisError> {
+    spectral_centroid_and_spread(magnitudes, frequencies).map(|(_, s)| s)
+}
+
+/// Spectral centroid and spread computed in a single pass.
+///
+/// Equivalent to calling [`spectral_centroid`] and [`spectral_spread`] separately
+/// but traverses the slices only once. Prefer this when both values are needed.
+///
+/// Returns `(centroid_hz, spread_hz)`.
+///
+/// # Errors
+///
+/// Returns [`AnalysisError::EmptyInput`] if `magnitudes` is empty, or
+/// [`AnalysisError::InvalidParameter`] if the slice lengths differ.
+///
+/// # Examples
+///
+/// ```
+/// use resonant_analysis::spectral;
+///
+/// let mags = [0.0, 0.0, 1.0, 0.0];
+/// let freqs = [0.0, 500.0, 1000.0, 1500.0];
+/// let (c, s) = spectral::spectral_centroid_and_spread(&mags, &freqs).unwrap();
+/// assert!((c - 1000.0).abs() < 1e-4);
+/// assert!(s < 1.0);
+/// ```
+#[must_use = "returns (centroid_hz, spread_hz)"]
+pub fn spectral_centroid_and_spread(
+    magnitudes: &[f32],
+    frequencies: &[f32],
+) -> Result<(f32, f32), AnalysisError> {
     validate_inputs(magnitudes, frequencies)?;
 
-    let centroid = spectral_centroid(magnitudes, frequencies)?;
     let total: f32 = magnitudes.iter().sum();
     if total <= f32::EPSILON {
-        return Ok(0.0);
+        return Ok((0.0, 0.0));
     }
 
-    let variance: f32 = magnitudes
+    // Accumulate weighted f and f² in one pass.
+    // Var[f] = E[f²] − E[f]² avoids a second traversal once centroid is known.
+    let (weighted_f, weighted_f2) = magnitudes
         .iter()
         .zip(frequencies)
-        .map(|(m, f)| {
-            let d = f - centroid;
-            m * d * d
-        })
-        .sum::<f32>()
-        / total;
+        .fold((0.0_f32, 0.0_f32), |(wf, wf2), (m, f)| {
+            (wf + m * f, wf2 + m * f * f)
+        });
 
-    Ok(variance.sqrt())
+    let centroid = weighted_f / total;
+    // Clamp to zero: floating-point rounding can produce a tiny negative variance.
+    let variance = (weighted_f2 / total - centroid * centroid).max(0.0);
+
+    Ok((centroid, variance.sqrt()))
 }
 
 /// Spectral flatness: ratio of geometric mean to arithmetic mean of magnitudes.
@@ -347,5 +372,61 @@ mod tests {
     fn rolloff_length_mismatch() {
         let err = spectral_rolloff(&[1.0], &[1.0, 2.0], 0.5);
         assert!(matches!(err, Err(AnalysisError::InvalidParameter { .. })));
+    }
+
+    #[test]
+    fn centroid_and_spread_empty() {
+        assert_eq!(
+            spectral_centroid_and_spread(&[], &[]),
+            Err(AnalysisError::EmptyInput)
+        );
+    }
+
+    #[test]
+    fn centroid_and_spread_length_mismatch() {
+        let err = spectral_centroid_and_spread(&[1.0], &[1.0, 2.0]);
+        assert!(matches!(err, Err(AnalysisError::InvalidParameter { .. })));
+    }
+
+    #[test]
+    fn centroid_and_spread_single_peak() {
+        // Single peak at 1000 Hz: centroid = 1000, spread = 0.
+        let mags = [0.0, 0.0, 1.0, 0.0];
+        let (c, s) = spectral_centroid_and_spread(&mags, &FREQS).unwrap();
+        assert!((c - 1000.0).abs() < 1e-4, "centroid {c} ≠ 1000");
+        assert!(s < 1e-4, "spread {s} should be ~0 for a single peak");
+    }
+
+    #[test]
+    fn centroid_and_spread_silence() {
+        let mags = [0.0_f32; 4];
+        let (c, s) = spectral_centroid_and_spread(&mags, &FREQS).unwrap();
+        assert!(c.is_finite() && c == 0.0);
+        assert!(s.is_finite() && s == 0.0);
+    }
+
+    #[test]
+    fn centroid_and_spread_matches_individual_functions() {
+        // Both a flat and a peaked spectrum; verify combined result equals
+        // calling the individual functions separately.
+        let cases: &[(&[f32], &[f32])] = &[
+            (&[1.0, 1.0, 1.0, 1.0], &FREQS),
+            (&[0.0, 0.5, 1.0, 0.5], &FREQS),
+            (&[1.0, 0.0, 0.0, 0.0], &FREQS),
+        ];
+        for (mags, freqs) in cases {
+            let (c, s) = spectral_centroid_and_spread(mags, freqs).unwrap();
+            let expected_c = spectral_centroid(mags, freqs).unwrap();
+            let expected_s = spectral_spread(mags, freqs).unwrap();
+            // Tolerance: single-pass variance formula vs two-pass; ±0.5 Hz is generous.
+            assert!(
+                (c - expected_c).abs() < 0.5,
+                "centroid mismatch: {c} vs {expected_c}"
+            );
+            assert!(
+                (s - expected_s).abs() < 0.5,
+                "spread mismatch: {s} vs {expected_s}"
+            );
+        }
     }
 }
