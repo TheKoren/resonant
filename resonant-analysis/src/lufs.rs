@@ -19,10 +19,18 @@ use crate::AnalysisError;
 /// operates on the weighted sum of per-channel mean-square levels.
 ///
 /// Standard weights: L=1.0, R=1.0, C=1.0, LFE=0.0, Ls=√2, Rs=√2.
+///
+/// Use [`mono`], [`stereo`], [`surround_5_1`], or [`custom`] to construct.
+/// Per-channel weights (linear, not dB) are readable via [`weights`].
+///
+/// [`mono`]: ChannelConfig::mono
+/// [`stereo`]: ChannelConfig::stereo
+/// [`surround_5_1`]: ChannelConfig::surround_5_1
+/// [`custom`]: ChannelConfig::custom
+/// [`weights`]: ChannelConfig::weights
 #[derive(Debug, Clone)]
 pub struct ChannelConfig {
-    /// Per-channel gain weights (linear, not dB).
-    pub weights: Vec<f32>,
+    weights: Vec<f32>,
 }
 
 impl ChannelConfig {
@@ -50,6 +58,37 @@ impl ChannelConfig {
         Self {
             weights: vec![1.0, 1.0, 1.0, 0.0, SQRT_2, SQRT_2],
         }
+    }
+
+    /// Creates a `ChannelConfig` with custom per-channel weights.
+    ///
+    /// Returns `None` if `weights` is empty or any weight is non-finite
+    /// (NaN or ±∞). Zero weights are permitted (e.g. LFE exclusion).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use resonant_analysis::lufs::ChannelConfig;
+    ///
+    /// // Equal-weight quad: L, R, Ls, Rs
+    /// let cfg = ChannelConfig::custom(vec![1.0, 1.0, 1.0, 1.0]).unwrap();
+    /// assert_eq!(cfg.weights(), &[1.0, 1.0, 1.0, 1.0]);
+    ///
+    /// assert!(ChannelConfig::custom(vec![]).is_none());
+    /// assert!(ChannelConfig::custom(vec![f32::NAN]).is_none());
+    /// ```
+    #[must_use]
+    pub fn custom(weights: Vec<f32>) -> Option<Self> {
+        if weights.is_empty() || !weights.iter().all(|w| w.is_finite()) {
+            return None;
+        }
+        Some(Self { weights })
+    }
+
+    /// Returns the per-channel gain weights (linear, not dB).
+    #[must_use]
+    pub fn weights(&self) -> &[f32] {
+        &self.weights
     }
 }
 
@@ -696,14 +735,36 @@ mod tests {
         ));
     }
 
+    // --- ChannelConfig constructor / accessor tests ---
+
     #[test]
-    fn multichannel_empty_config_returns_error() {
-        let mut analyser = make(SR);
-        let config = ChannelConfig { weights: vec![] };
-        assert!(matches!(
-            analyser.integrated_loudness_multichannel(&[0.1_f32; 100], &config),
-            Err(AnalysisError::InvalidParameter { .. })
-        ));
+    fn channel_config_custom_empty_returns_none() {
+        assert!(ChannelConfig::custom(vec![]).is_none());
+    }
+
+    #[test]
+    fn channel_config_custom_nan_returns_none() {
+        assert!(ChannelConfig::custom(vec![1.0, f32::NAN]).is_none());
+    }
+
+    #[test]
+    fn channel_config_custom_infinite_returns_none() {
+        assert!(ChannelConfig::custom(vec![1.0, f32::INFINITY]).is_none());
+        assert!(ChannelConfig::custom(vec![f32::NEG_INFINITY]).is_none());
+    }
+
+    #[test]
+    fn channel_config_custom_valid_zero_weight_allowed() {
+        // Zero is a valid weight (LFE exclusion); must not be rejected.
+        let cfg = ChannelConfig::custom(vec![1.0, 1.0, 0.0]).unwrap();
+        assert_eq!(cfg.weights(), &[1.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn channel_config_weights_accessor_matches_factory_methods() {
+        assert_eq!(ChannelConfig::mono().weights(), &[1.0_f32]);
+        assert_eq!(ChannelConfig::stereo().weights(), &[1.0_f32, 1.0]);
+        assert_eq!(ChannelConfig::surround_5_1().weights().len(), 6);
     }
 
     #[test]
