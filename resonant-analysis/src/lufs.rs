@@ -143,7 +143,9 @@ const RLB_48000: BiquadCoeffs = BiquadCoeffs {
 /// level (dBTP).
 ///
 /// The K-weighting filter state persists across calls. Call [`reset`] between
-/// independent signals to avoid state bleed.
+/// independent signals to avoid state bleed. Alternatively, `clone` the
+/// analyser before a block boundary to checkpoint the filter state; restore it
+/// by replacing the analyser with the clone.
 ///
 /// # Examples
 ///
@@ -157,6 +159,7 @@ const RLB_48000: BiquadCoeffs = BiquadCoeffs {
 /// ```
 ///
 /// [`reset`]: LufsAnalyser::reset
+#[derive(Clone)]
 pub struct LufsAnalyser {
     sample_rate: f32,
     pre: Biquad,
@@ -660,6 +663,30 @@ mod tests {
         assert!(
             short_term_lufs > -35.0 && short_term_lufs < -15.0,
             "short-term LUFS out of range: {short_term_lufs:.2}"
+        );
+    }
+
+    #[test]
+    fn clone_checkpoints_filter_state() {
+        // Feed some signal to give the filters non-trivial state, then clone.
+        // Both the original and the clone must produce identical results on the
+        // same subsequent input, confirming the state was captured correctly and
+        // the two instances are independent.
+        let block_samples = block_len(SR);
+        let warmup = sine(200.0, 0.3, block_samples, SR);
+        let test_sig = sine(1000.0, 0.10, block_samples, SR);
+
+        let mut analyser = make(SR);
+        let _ = analyser.momentary(&warmup);
+
+        let mut checkpoint = analyser.clone();
+
+        let lufs_original = analyser.momentary(&test_sig);
+        let lufs_clone = checkpoint.momentary(&test_sig);
+
+        assert!(
+            (lufs_original - lufs_clone).abs() < 1e-6,
+            "clone must reproduce original result: {lufs_original:.6} vs {lufs_clone:.6}"
         );
     }
 
