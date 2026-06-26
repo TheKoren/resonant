@@ -192,13 +192,15 @@ fn adaptive_threshold(envelope: &[f32], window: usize, multiplier: f32) -> Vec<f
     let envelope_len = envelope.len();
     let mut thresholds = Vec::with_capacity(envelope_len);
     let half_window = window / 2;
+    // Allocated once here and reused by every local_median call in the loop.
+    let mut scratch = Vec::with_capacity(window.max(1));
 
     for i in 0..envelope_len {
         let start = i.saturating_sub(half_window);
         let end = (i + half_window + 1).min(envelope_len);
         let local = &envelope[start..end];
 
-        let median = local_median(local);
+        let median = local_median(local, &mut scratch);
         let mad = local_mad(local, median);
         thresholds.push(median + multiplier * mad);
     }
@@ -206,18 +208,19 @@ fn adaptive_threshold(envelope: &[f32], window: usize, multiplier: f32) -> Vec<f
     thresholds
 }
 
-/// Median of a small slice (copies and sorts).
-fn local_median(values: &[f32]) -> f32 {
+/// Median of a small slice; `scratch` is cleared and reused to avoid per-call allocation.
+fn local_median(values: &[f32], scratch: &mut Vec<f32>) -> f32 {
     if values.is_empty() {
         return 0.0;
     }
-    let mut sorted: Vec<f32> = values.to_vec();
-    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
-    let median_idx = sorted.len() / 2;
-    if sorted.len() % 2 == 0 {
-        (sorted[median_idx - 1] + sorted[median_idx]) / 2.0
+    scratch.clear();
+    scratch.extend_from_slice(values);
+    scratch.sort_by(f32::total_cmp);
+    let median_idx = scratch.len() / 2;
+    if scratch.len() % 2 == 0 {
+        (scratch[median_idx - 1] + scratch[median_idx]) / 2.0
     } else {
-        sorted[median_idx]
+        scratch[median_idx]
     }
 }
 
@@ -447,17 +450,30 @@ mod tests {
 
     #[test]
     fn local_median_odd() {
-        assert_eq!(local_median(&[3.0, 1.0, 2.0]), 2.0);
+        let mut s = Vec::new();
+        assert_eq!(local_median(&[3.0, 1.0, 2.0], &mut s), 2.0);
     }
 
     #[test]
     fn local_median_even() {
-        assert_eq!(local_median(&[1.0, 3.0, 2.0, 4.0]), 2.5);
+        let mut s = Vec::new();
+        assert_eq!(local_median(&[1.0, 3.0, 2.0, 4.0], &mut s), 2.5);
     }
 
     #[test]
     fn local_median_empty() {
-        assert_eq!(local_median(&[]), 0.0);
+        let mut s = Vec::new();
+        assert_eq!(local_median(&[], &mut s), 0.0);
+    }
+
+    #[test]
+    fn local_median_scratch_reuse_gives_correct_results() {
+        // Reusing the same scratch across calls must not corrupt results.
+        let mut scratch = Vec::new();
+        assert_eq!(local_median(&[3.0, 1.0, 2.0], &mut scratch), 2.0);
+        assert_eq!(local_median(&[1.0, 3.0, 2.0, 4.0], &mut scratch), 2.5);
+        assert_eq!(local_median(&[5.0], &mut scratch), 5.0);
+        assert_eq!(local_median(&[2.0, 2.0, 2.0], &mut scratch), 2.0);
     }
 
     #[test]
