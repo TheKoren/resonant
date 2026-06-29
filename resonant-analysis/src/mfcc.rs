@@ -5,8 +5,6 @@
 //! audio via STFT → mel filterbank → log energy → DCT-II, and provides delta
 //! and delta-delta (acceleration) coefficients.
 
-extern crate alloc;
-
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -233,6 +231,7 @@ impl MfccExtractor {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
     use core::f32::consts::PI;
 

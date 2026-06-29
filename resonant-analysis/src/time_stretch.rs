@@ -3,8 +3,6 @@
 //! [`time_stretch`] combines phase-vocoder time-stretching with polyphase
 //! resampling to provide independent control over duration and pitch.
 
-extern crate alloc;
-
 use alloc::vec;
 use alloc::vec::Vec;
 

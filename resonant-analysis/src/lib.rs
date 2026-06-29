@@ -1,5 +1,5 @@
+#![no_std]
 #![warn(missing_docs)]
-
 //! `resonant-analysis` — high-level audio analysis features.
 //!
 //! Provides onset detection, beat tracking, pitch estimation, MFCCs,
@@ -17,6 +17,8 @@
 //! let centroid = spectral::spectral_centroid(&magnitudes, &frequencies).unwrap();
 //! let flatness = spectral::spectral_flatness(&magnitudes).unwrap();
 //! ```
+
+extern crate alloc;
 
 /// Chroma features — 12-bin pitch class profiles.
 pub mod chroma;

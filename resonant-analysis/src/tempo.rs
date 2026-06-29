@@ -4,8 +4,6 @@
 //! the dominant periodicity via normalized autocorrelation. The peak lag is
 //! converted to BPM.
 
-extern crate alloc;
-
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -228,6 +226,7 @@ fn parabolic_interpolation(acf: &[f32], lag: usize) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
     use core::f32::consts::PI;
 

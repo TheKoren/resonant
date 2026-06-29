@@ -104,7 +104,10 @@ fn lin_to_db(lin: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
+    use alloc::vec;
+    use alloc::vec::Vec;
     use core::f32::consts::PI;
 
     const SR: usize = 44100;

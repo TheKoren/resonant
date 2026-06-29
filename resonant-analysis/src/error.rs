@@ -43,7 +43,9 @@ impl From<resonant_fft::FftError> for AnalysisError {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
+    use alloc::string::ToString;
 
     #[test]
     fn display_empty_input() {

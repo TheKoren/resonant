@@ -7,8 +7,6 @@
 //! The extractor computes an STFT, maps each FFT bin to a pitch class based
 //! on its frequency, and accumulates energy per class.
 
-extern crate alloc;
-
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -216,6 +214,7 @@ fn build_chroma_map(fft_size: usize, sample_rate: f32, tuning_hz: f32) -> Vec<Op
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
     use core::f32::consts::PI;
 

@@ -4,7 +4,6 @@
 //! levels over 400 ms gating blocks, then applies the absolute and relative
 //! gates defined in the standard to produce integrated loudness.
 
-extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -521,6 +520,7 @@ fn mean_f32(v: &[f32]) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
     use core::f32::consts::PI;
 
@@ -584,8 +584,7 @@ mod tests {
             (96000.0_f32, PRE_96000, RLB_96000),
         ] {
             let pre_live = design::shelving_high(4.0, 1681.97, sr).unwrap();
-            let rlb_live =
-                design::butterworth_highpass(38.135_f64, f64::from(sr)).unwrap();
+            let rlb_live = design::butterworth_highpass(38.135_f64, f64::from(sr)).unwrap();
             assert!(
                 coeffs_close(pre_const, pre_live),
                 "PRE constant mismatch at {sr} Hz"

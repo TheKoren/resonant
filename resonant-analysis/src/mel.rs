@@ -2,7 +2,6 @@
 //!
 //! Internal helpers used by the MFCC extractor. Not part of the public API.
 
-extern crate alloc;
 use alloc::vec;
 use alloc::vec::Vec;
 

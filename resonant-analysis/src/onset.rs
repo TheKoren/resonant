@@ -4,8 +4,6 @@
 //! This module computes the onset strength envelope using half-wave rectified
 //! spectral flux, then picks peaks above an adaptive threshold.
 
-extern crate alloc;
-
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -250,6 +248,7 @@ fn pick_peaks(envelope: &[f32], threshold: &[f32]) -> Vec<(usize, f32)> {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
     use core::f32::consts::PI;
 

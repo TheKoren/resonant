@@ -6,8 +6,6 @@
 //!
 //! Reference: de Cheveigné & Kawahara (2002), doi:10.1121/1.1458024
 
-extern crate alloc;
-
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -234,6 +232,7 @@ fn parabolic_interpolation(cmnd: &[f32], tau: usize) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
     use core::f32::consts::PI;
 

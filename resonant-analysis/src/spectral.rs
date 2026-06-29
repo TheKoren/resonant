@@ -4,8 +4,6 @@
 //! frequencies only). They do **not** perform an FFT — feed them the
 //! output of [`SignalFreqExt::magnitude()`](resonant_fft::SignalFreqExt).
 
-extern crate alloc;
-
 use crate::error::AnalysisError;
 
 /// Spectral centroid: the weighted mean frequency of the spectrum.
