@@ -9,7 +9,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use resonant_filters::biquad::{Biquad, BiquadCoeffs};
-use resonant_filters::{design, PolyphaseResampler};
+use resonant_filters::PolyphaseResampler;
 
 use crate::AnalysisError;
 
@@ -134,6 +134,37 @@ const RLB_48000: BiquadCoeffs = BiquadCoeffs {
     b2: 1.0_f32,
     a1: -1.990_047_5_f32,
     a2: 0.990_072_25_f32,
+};
+// Coefficients for 88200 and 96000 Hz derived from the same analog prototype
+// as the 44100/48000 constants (shelving_high at 1681.97 Hz, Butterworth HP
+// at 38.135 Hz) and frozen here to avoid runtime computation on every new().
+const PRE_88200: BiquadCoeffs = BiquadCoeffs {
+    b0: 1.554_272_3_f32,
+    b1: -2.874_154_6_f32,
+    b2: 1.336_357_1_f32,
+    a1: -1.810_428_9_f32,
+    a2: 0.826_903_76_f32,
+};
+const RLB_88200: BiquadCoeffs = BiquadCoeffs {
+    b0: 0.998_080_85_f32,
+    b1: -1.996_161_7_f32,
+    b2: 0.998_080_85_f32,
+    a1: -1.996_158_1_f32,
+    a2: 0.996_165_45_f32,
+};
+const PRE_96000: BiquadCoeffs = BiquadCoeffs {
+    b0: 1.556_729_1_f32,
+    b1: -2.897_725_6_f32,
+    b2: 1.355_005_5_f32,
+    a1: -1.825_756_3_f32,
+    a2: 0.839_765_3_f32,
+};
+const RLB_96000: BiquadCoeffs = BiquadCoeffs {
+    b0: 0.998_236_66_f32,
+    b1: -1.996_473_3_f32,
+    b2: 0.998_236_66_f32,
+    a1: -1.996_470_2_f32,
+    a2: 0.996_476_5_f32,
 };
 
 /// ITU-R BS.1770-4 loudness analyser.
@@ -437,23 +468,8 @@ fn kweight_coeffs(sr: f32) -> Result<(BiquadCoeffs, BiquadCoeffs), AnalysisError
     match sr.round() as u32 {
         44100 => Ok((PRE_44100, RLB_44100)),
         48000 => Ok((PRE_48000, RLB_48000)),
-        88200 | 96000 => {
-            // Analog prototype: +4 dB high-shelf at 1681.97 Hz (pre-filter);
-            // 2nd-order Butterworth HP at 38.135 Hz (RLB high-pass).
-            let pre = design::shelving_high(4.0, 1681.97, sr).map_err(|_| {
-                AnalysisError::InvalidParameter {
-                    name: "sample_rate",
-                    reason: "K-weighting pre-filter design failed",
-                }
-            })?;
-            let rlb = design::butterworth_highpass(38.135_f64, f64::from(sr)).map_err(|_| {
-                AnalysisError::InvalidParameter {
-                    name: "sample_rate",
-                    reason: "K-weighting RLB high-pass design failed",
-                }
-            })?;
-            Ok((pre, rlb))
-        }
+        88200 => Ok((PRE_88200, RLB_88200)),
+        96000 => Ok((PRE_96000, RLB_96000)),
         _ => Err(AnalysisError::InvalidParameter {
             name: "sample_rate",
             reason: "supported rates: 44100, 48000, 88200, 96000",
@@ -542,6 +558,43 @@ mod tests {
     #[test]
     fn new_96000_succeeds() {
         assert!(LufsAnalyser::new(96000.0).is_ok());
+    }
+
+    #[test]
+    fn high_rate_constants_match_design_functions() {
+        // Verify frozen constants against the design functions that produced them.
+        // A mismatch here means a constant was transcribed incorrectly or the
+        // analog prototype parameters drifted.
+        use resonant_filters::design;
+
+        fn coeffs_close(a: BiquadCoeffs, b: BiquadCoeffs) -> bool {
+            [
+                (a.b0, b.b0),
+                (a.b1, b.b1),
+                (a.b2, b.b2),
+                (a.a1, b.a1),
+                (a.a2, b.a2),
+            ]
+            .iter()
+            .all(|(x, y)| (x - y).abs() < 1e-6)
+        }
+
+        for (sr, pre_const, rlb_const) in [
+            (88200.0_f32, PRE_88200, RLB_88200),
+            (96000.0_f32, PRE_96000, RLB_96000),
+        ] {
+            let pre_live = design::shelving_high(4.0, 1681.97, sr).unwrap();
+            let rlb_live =
+                design::butterworth_highpass(38.135_f64, f64::from(sr)).unwrap();
+            assert!(
+                coeffs_close(pre_const, pre_live),
+                "PRE constant mismatch at {sr} Hz"
+            );
+            assert!(
+                coeffs_close(rlb_const, rlb_live),
+                "RLB constant mismatch at {sr} Hz"
+            );
+        }
     }
 
     #[test]
